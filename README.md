@@ -52,12 +52,116 @@ Each driver can be linked to only one email. `make reset-db` clears all users an
 
 ## How it works
 
+### Block diagram
+
+Each box is a file or folder in the repo. Arrows show who calls whom; database arrows say whether
+that part reads or writes.
+
+```mermaid
+flowchart TB
+    subgraph Browser["Browser (app/web/static)"]
+        UI["Login → Link phone → Chat<br/>+ demo driver test guide"]
+    end
+
+    subgraph Server["FastAPI app (app/web/main.py)"]
+        API["API routes<br/>session cookie holds the user"]
+        ID["identity.py<br/>email login · phone link"]
+        CONV["conversations.py<br/>list · open · store messages"]
+        CLEAN["input_clean.py<br/>trim · drop control chars<br/>reject empty / over 1,000"]
+        CHAT["chat.py<br/>clean → store → agent → store"]
+    end
+
+    subgraph Agent["LangGraph agent (app/agent)"]
+        LOOP["graph.py<br/>agent ⇄ tools loop<br/>failure → 'Sorry…'"]
+        PROMPT["prompt.py<br/>rules + driver's live data<br/>rebuilt every turn"]
+        TOOLS["tools.py<br/>resolve_arrival · find_slots · check_pick<br/>driver ID from session, not the model"]
+    end
+
+    subgraph Sched["Scheduling logic (app/scheduling) · no LLM · read-only"]
+        SHIP["shipments.py<br/>deliveries · arrival maths · coordinator"]
+        SLOTS["slots.py<br/>find_slots · check_pick"]
+        RULES["rules.py<br/>slot rules S1–S7"]
+    end
+
+    LLM(["LLM via OpenRouter<br/>openai/gpt-4.1-mini"])
+    DB[("data/app.db<br/>seed data + app_users")]
+    CP[("data/checkpoints.db<br/>agent memory per conversation")]
+
+    UI -->|"JSON over HTTP"| API
+    API --> ID
+    API --> CONV
+    API --> CHAT
+    CHAT --> CLEAN
+    CHAT --> CONV
+    CHAT --> LOOP
+    LOOP --> PROMPT
+    LOOP <-->|"messages, tool calls"| LLM
+    LOOP --> TOOLS
+    LOOP <--> CP
+    TOOLS --> SHIP
+    TOOLS --> SLOTS
+    SLOTS --> RULES
+    ID -->|"read / write users"| DB
+    CONV -->|"read / write chats"| DB
+    PROMPT -->|"read only"| DB
+    SHIP -->|"read only"| DB
+    SLOTS -->|"read only"| DB
 ```
-Browser ─► FastAPI ─► clean input ─► store message ─► LangGraph agent ─► store reply
-                                                        │
-                                       tools (read-only) ▼
-                     resolve_arrival · find_slots · check_pick ─► SQLite (seed data)
+
+### Data flow: one driver message
+
+What happens when Manoj types *"the Jaipur one, reaching 11:20"*:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor D as Driver
+    participant W as Chat page
+    participant A as FastAPI + chat.py
+    participant G as Agent (LangGraph)
+    participant L as LLM (OpenRouter)
+    participant T as Tools + slot logic
+    participant DB as app.db
+
+    D->>W: "the Jaipur one, reaching 11:20"
+    W->>A: POST /api/conversations/:id/messages
+    A->>A: driver ID from session cookie, clean the text
+    A->>DB: store DRIVER message
+    A->>G: run_turn(conversation, driver, text)
+    G->>DB: read the driver's deliveries (read-only)
+    G->>L: system prompt + conversation so far
+    L-->>G: call resolve_arrival(SHP1006, "11:20")
+    G->>T: resolve_arrival
+    T-->>G: arrival 11:20 (code does the time maths)
+    G->>L: tool result
+    L-->>G: call find_slots(SHP1006, "11:20")
+    G->>T: find_slots
+    T->>DB: read slots, docks, appointments, rules (read-only)
+    T-->>G: D2 12:00, D4 12:00, D1 13:00, D2 13:00, D3 13:00
+    G->>L: tool result
+    L-->>G: reply listing the 5 slots
+    G-->>A: reply text
+    A->>DB: store AGENT message
+    A-->>W: both messages as JSON
+    W-->>D: numbered list of slots
 ```
+
+If the driver then picks a slot, the same loop runs with `check_pick`, and the reply gives the
+coordinator's number. Nothing is booked.
+
+### What the app reads and writes
+
+| Data | Tables | The app… |
+|---|---|---|
+| Login | `app_users` (the only table we added) | reads and writes |
+| Chats | `chat_threads`, `chat_messages` (from the seed) | reads and writes |
+| Drivers | `drivers` | reads only |
+| Deliveries and arrival times | `shipments`, `eta_updates` → `v_latest_eta` | reads only |
+| Slots and docks | `appointment_slots`, `docks`, `appointments`, `facility_rules` | reads only |
+| Warehouse and contacts | `facilities`, `facility_contacts` | reads only |
+| Agent memory | `data/checkpoints.db` (separate file, LangGraph's own format) | reads and writes |
+
+### Key ideas
 
 - **The LLM talks; code decides.** The model chooses which tool to call. Code checks the slot
   rules (right warehouse, dock type, weight limit, open, free, after arrival, finish-by), works out
