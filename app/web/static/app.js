@@ -2,7 +2,6 @@
 // All text is inserted with textContent, never innerHTML, so messages can't inject markup.
 
 const $ = (id) => document.getElementById(id);
-const views = { login: $("view-login"), link: $("view-link"), chat: $("view-chat") };
 let currentId = null;
 let sending = false;
 
@@ -22,10 +21,23 @@ async function api(path, options = {}) {
   return data;
 }
 
+// name: "login" | "link" | "chat". Login and link share one view with the demo drivers panel.
 function show(name) {
-  for (const [key, el] of Object.entries(views)) el.hidden = key !== name;
+  $("view-auth").hidden = name === "chat";
+  $("login-form").hidden = name !== "login";
+  $("link-form").hidden = name !== "link";
+  $("view-chat").hidden = name !== "chat";
   $("toggle-list").hidden = name !== "chat";
   $("who").hidden = name === "login";
+}
+
+// Demo drivers: clicking a number puts it in the phone field (used at the link step).
+for (const btn of document.querySelectorAll(".phone-pick")) {
+  btn.addEventListener("click", () => {
+    $("phone").value = btn.dataset.phone;
+    $("link-error").textContent = "";
+    if (!$("link-form").hidden) $("phone").focus();
+  });
 }
 
 function setUser(user) {

@@ -53,8 +53,12 @@ button:disabled { opacity: .55; cursor: default; }
 .topbar h1 span { color: var(--muted); font-weight: 500; }
 .who { display: flex; align-items: center; gap: .5rem; color: var(--muted); font-size: .9rem; }
 
-/* login / link cards */
-.card-view { flex: 1; display: grid; place-items: center; padding: 1rem; }
+/* login / link cards, with the demo drivers panel beside them */
+.auth-layout {
+  flex: 1; display: flex; align-items: flex-start; justify-content: center;
+  gap: 1.25rem; padding: 2rem 1rem; overflow-y: auto;
+}
+.auth-step { width: 100%; max-width: 380px; flex-shrink: 0; }
 .card {
   width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--line);
   border-radius: var(--radius); padding: 1.5rem; display: flex; flex-direction: column; gap: .6rem;
@@ -68,6 +72,30 @@ input, textarea {
 }
 input:focus, textarea:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
 .error { color: var(--error); font-size: .9rem; margin: 0; min-height: 1.2em; }
+
+.demo { max-width: 900px; flex: 1; min-width: 0; }
+.demo h3 { margin: .8rem 0 0; font-size: 1rem; }
+.demo .small { font-size: .82rem; margin-top: .3rem; }
+.table-scroll { overflow-x: auto; }
+.try {
+  display: inline-block; margin: 0 .25rem .3rem 0; padding: .15rem .5rem; border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--line); font-size: .85rem; white-space: nowrap;
+}
+.demo-table em { color: var(--muted); }
+.demo code { font-size: .85em; background: var(--bg); padding: .05rem .3rem; border-radius: 4px; }
+.demo-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.demo-table th, .demo-table td {
+  text-align: left; padding: .5rem .55rem; border-bottom: 1px solid var(--line); vertical-align: top;
+}
+.demo-table th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; }
+.demo-table tr:last-child td { border-bottom: 0; }
+.demo-table td:nth-child(2) { white-space: nowrap; }
+.phone-pick {
+  background: none; border: 0; padding: 0; color: var(--brand);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem; text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.phone-pick:hover { opacity: .8; }
 
 /* chat */
 .chat-layout { flex: 1; display: flex; min-height: 0; }
@@ -107,6 +135,25 @@ input:focus, textarea:focus { outline: 2px solid var(--brand); outline-offset: 1
 }
 .composer textarea { resize: none; max-height: 8rem; }
 .composer-error { padding: 0 1rem .5rem; background: var(--panel); }
+
+/* narrower screens: demo panel goes under the card */
+@media (max-width: 1100px) {
+  .auth-layout { flex-direction: column; align-items: center; }
+  .demo { width: 100%; max-width: 760px; flex: none; }
+}
+/* phone width: each driver becomes a stacked block instead of a 4-column row */
+@media (max-width: 720px) {
+  .demo-table thead { display: none; }
+  .demo-table, .demo-table tbody, .demo-table tr, .demo-table td { display: block; width: 100%; }
+  .demo-table tr { padding: .65rem 0; border-bottom: 1px solid var(--line); }
+  .demo-table tr:last-child { border-bottom: 0; }
+  .demo-table td { border: 0; padding: .15rem 0; }
+  .demo-table td:has(.phone-pick) { display: inline-block; width: auto; margin-right: .6rem; }
+  .demo-table td:has(.phone-pick) + td { display: inline-block; width: auto; font-weight: 600; }
+  .demo-table td:last-child { color: var(--muted); }
+  .demo-table td:last-child::before { content: "→ "; }
+  .try { white-space: normal; }
+}
 
 /* phone width */
 @media (max-width: 720px) {

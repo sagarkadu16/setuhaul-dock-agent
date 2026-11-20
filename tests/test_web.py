@@ -39,6 +39,23 @@ def test_page_is_served(client):
     assert client.get("/static/app.js").status_code == 200
 
 
+def test_demo_driver_numbers_on_login_page_are_real_drivers(client, ro_db):
+    import re
+
+    from app.identity import _phone_key
+
+    page = client.get("/").text
+    shown = re.findall(r'data-phone="(\d+)"', page)
+    assert shown[0] == "9000010006"          # the main demo first
+    known = {_phone_key(r["phone"]) for r in ro_db.execute("SELECT phone FROM drivers")}
+    assert sorted(shown) == sorted(known)    # every driver listed exactly once
+
+
+def test_page_is_not_cached(client):
+    assert client.get("/").headers["cache-control"] == "no-cache"
+    assert client.get("/static/style.css").headers["cache-control"] == "no-cache"
+
+
 def test_must_log_in_first(client):
     assert client.get("/api/me").status_code == 401
     assert client.get("/api/conversations").status_code == 401

@@ -80,6 +80,14 @@ def create_app(
     )
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+    @app.middleware("http")
+    async def no_stale_page(request: Request, call_next):
+        # Local prototype: always load the latest page, styles and script after a change.
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     # The agent is built on first use, so the app starts (and the login pages work) without a key.
     agent_lock = threading.Lock()
     agent_holder: dict[str, Agent] = {}

@@ -16,28 +16,146 @@
     </div>
   </header>
 
-  <!-- Step 1: email -->
-  <main id="view-login" class="card-view" hidden>
-    <form id="login-form" class="card">
-      <h2>Log in</h2>
-      <p class="hint">Enter your email. No password needed.</p>
-      <label for="email">Email</label>
-      <input id="email" type="email" autocomplete="email" required placeholder="you@example.com">
-      <p class="error" id="login-error" role="alert"></p>
-      <button type="submit" class="primary">Continue</button>
-    </form>
-  </main>
+  <!-- Steps 1-2: email, then link phone (first time only), with demo drivers alongside -->
+  <main id="view-auth" class="auth-layout" hidden>
+    <div class="auth-step">
+      <form id="login-form" class="card" hidden>
+        <h2>Log in</h2>
+        <p class="hint">Enter your email. No password needed.</p>
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="email" required placeholder="you@example.com">
+        <p class="error" id="login-error" role="alert"></p>
+        <button type="submit" class="primary">Continue</button>
+      </form>
 
-  <!-- Step 2: link phone (first time only) -->
-  <main id="view-link" class="card-view" hidden>
-    <form id="link-form" class="card">
-      <h2>Link your phone</h2>
-      <p class="hint">Enter the phone number your transport company has for you. You only do this once.</p>
-      <label for="phone">Phone number</label>
-      <input id="phone" type="tel" autocomplete="tel" required placeholder="+91-90000 10006">
-      <p class="error" id="link-error" role="alert"></p>
-      <button type="submit" class="primary">Link</button>
-    </form>
+      <form id="link-form" class="card" hidden>
+        <h2>Link your phone</h2>
+        <p class="hint">Enter the phone number your transport company has for you. You only do this once.</p>
+        <label for="phone">Phone number</label>
+        <input id="phone" type="tel" autocomplete="tel" required placeholder="+91-90000 10006">
+        <p class="error" id="link-error" role="alert"></p>
+        <button type="submit" class="primary">Link</button>
+      </form>
+    </div>
+
+    <aside class="card demo" aria-labelledby="demo-title">
+      <h2 id="demo-title">Demo drivers &amp; test guide</h2>
+      <p class="hint">This prototype uses sample data (snapshot 4 Aug 2026, clock 09:40). Link one of these
+        numbers — click a number to fill it in — then type the messages in order.</p>
+      <div class="table-scroll">
+      <table class="demo-table">
+        <thead>
+          <tr><th>Phone</th><th>Driver</th><th>Try typing</th><th>You should see</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010006">9000010006</button></td>
+            <td>Manoj Sharma</td>
+            <td><span class="try">Stuck in traffic, I&#x27;ll be late</span><span class="try">the Jaipur one, reaching 11:20</span><span class="try">I&#x27;ll take the 12 o&#x27;clock one on D2</span></td>
+            <td><strong>Main demo.</strong> Asks which delivery (Jaipur or Gurugram) → D2 12:00, D4 12:00, D1 13:00… → repeats D2 12:00, says <em>not booked</em>, gives +91-141-5001101</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010007">9000010007</button></td>
+            <td>Nitin Patil</td>
+            <td><span class="try">I will be late by 45 minutes</span><span class="try">2, reaching 12:00</span></td>
+            <td>Asks which delivery (Textiles / Construction equipment) → heavy dock only: D6 12:30, 14:00…</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010013">9000010013</button></td>
+            <td>Kailash Gurjar</td>
+            <td><span class="try">I am late by one hour</span><span class="try">yes</span></td>
+            <td>"So you will reach at about 11:00?" → D2 11:00 <em>(your current slot)</em>, D2 12:00, D4 12:00…</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010001">9000010001</button></td>
+            <td>Rajesh Kumar</td>
+            <td><span class="try">Reaching 11:30</span></td>
+            <td>D1 12:00 <em>(your current slot)</em>, D2 12:00, D4 12:00, D1 13:00, D2 13:00</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010014">9000010014</button></td>
+            <td>Pradeep Jat</td>
+            <td><span class="try">Reaching 11:25</span></td>
+            <td>21-tonne load → only D2 and D4 (D1/D3 take 20 t): D2 12:00, D4 12:00, D2 13:00…</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010015">9000010015</button></td>
+            <td>Mohammed Salim</td>
+            <td><span class="try">Reaching 18:30</span></td>
+            <td>Reefer dock under maintenance → no slot; gives the coordinator's number</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010010">9000010010</button></td>
+            <td>Deepak Saini</td>
+            <td><span class="try">Reaching 11:30</span></td>
+            <td>Frozen load → reefer dock D5 only: 12:00, 13:00, 14:00…</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010011">9000010011</button></td>
+            <td>Ramesh Choudhary</td>
+            <td><span class="try">Reaching 12:00</span></td>
+            <td>30-tonne load → heavy dock D6 only: 12:30, 14:00, 15:30…</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010009">9000010009</button></td>
+            <td>Vikram Solanki</td>
+            <td><span class="try">Reaching 10:50</span></td>
+            <td>D4 11:00 <em>(your current slot)</em>, D2 12:00, D4 12:00…</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010003">9000010003</button></td>
+            <td>Mukesh Yadav</td>
+            <td><span class="try">Reaching 11:50</span></td>
+            <td>No current slot → D2 12:00, D4 12:00, D1 13:00…</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010012">9000010012</button></td>
+            <td>Arjun Das</td>
+            <td><span class="try">Reaching 11:10</span></td>
+            <td>No current slot → D2 12:00, D4 12:00, D1 13:00…</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010004">9000010004</button></td>
+            <td>Sandeep Meena</td>
+            <td><span class="try">Late by 30 minutes</span><span class="try">yes</span></td>
+            <td>Only his evening delivery counts (the other is in the yard) → "about 18:30?" → D1 19:00, D2 19:00…</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010008">9000010008</button></td>
+            <td>Ashok Prajapat</td>
+            <td><span class="try">What time is my slot?</span></td>
+            <td>Delivery cancelled → contact dispatch; no slots</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010002">9000010002</button></td>
+            <td>Imran Khan</td>
+            <td><span class="try">Can I get a new slot?</span></td>
+            <td>Delivery is already unloading at a dock → can't reschedule; no slots</td>
+          </tr>
+          <tr>
+            <td><button type="button" class="phone-pick" data-phone="9000010005">9000010005</button></td>
+            <td>Gurpreet Singh</td>
+            <td><span class="try">Can I get a new slot?</span></td>
+            <td>Delivery is waiting in the yard → can't reschedule; no slots</td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+      <h3>Works for any driver</h3>
+      <div class="table-scroll">
+      <table class="demo-table">
+        <thead><tr><th>Try typing</th><th>You should see</th></tr></thead>
+        <tbody>
+          <tr><td><span class="try">write me a poem</span></td><td>One short polite refusal</td></tr>
+          <tr><td><span class="try">reaching 9:00</span></td><td>9:00 has passed (it&#x27;s 09:40) → asks again</td></tr>
+          <tr><td><span class="try">not sure  (twice, when asked the time)</span></td><td>Stops asking, gives the coordinator&#x27;s number</td></tr>
+          <tr><td><span class="try">book it for me</span></td><td>Can&#x27;t book; call the coordinator to confirm</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="hint small">Each driver can be linked to one email only — log out and use a new email to switch
+        driver, or run <code>make reset-db</code> to start over. Replies are worded a little differently each time.</p>
+    </aside>
   </main>
 
   <!-- Step 3: chat -->
