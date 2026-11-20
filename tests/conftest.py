@@ -4,11 +4,12 @@ and starts at the default simulated clock."""
 from __future__ import annotations
 
 import shutil
+from datetime import datetime
 
 import pytest
 
-from app.config import DEFAULT_CLOCK, clock
-from app.db import build_db, connect
+from app.config import DEFAULT_CLOCK, IST, clock
+from app.db import build_db, connect, connect_readonly
 
 
 @pytest.fixture(scope="session")
@@ -30,6 +31,20 @@ def db(db_path):
     conn = connect(db_path)
     yield conn
     conn.close()
+
+
+@pytest.fixture
+def ro_db(db_path):
+    """Read-only connection, as the scheduling layer uses in the app."""
+    conn = connect_readonly(db_path)
+    yield conn
+    conn.close()
+
+
+def at(hhmm: str) -> datetime:
+    """`at("11:20")` → 2026-08-04 11:20 IST, the snapshot day."""
+    hour, minute = map(int, hhmm.split(":"))
+    return datetime(2026, 8, 4, hour, minute, tzinfo=IST)
 
 
 @pytest.fixture(autouse=True)

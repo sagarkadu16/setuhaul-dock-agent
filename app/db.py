@@ -26,6 +26,17 @@ def connect(path: Path | str | None = None) -> sqlite3.Connection:
     return conn
 
 
+def connect_readonly(path: Path | str | None = None) -> sqlite3.Connection:
+    """Open a read-only connection. The scheduling layer uses only this, so it cannot change
+    operational data even by mistake (spec R26, plan §1)."""
+    uri = Path(path or settings.app_db_path).resolve().as_uri() + "?mode=ro"
+    conn = sqlite3.connect(uri, uri=True, isolation_level=None, timeout=5.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("PRAGMA query_only = ON")  # second guard, in case the file mode is ever changed
+    return conn
+
+
 def _remove(path: Path) -> None:
     for suffix in ("", "-wal", "-shm", "-journal"):
         Path(f"{path}{suffix}").unlink(missing_ok=True)

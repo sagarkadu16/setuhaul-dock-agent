@@ -189,8 +189,9 @@ never reach the agent (AC6); the API returns 400 with a driver-friendly message.
 One pure function, used for listing slots and for checking a slot the driver picked:
 
 ```python
-def check_slot(shipment, slot, dock, *, arrival, finish_by, held_by, facility_rules) -> list[str]:
+def check_slot(shipment, slot: SlotView, *, arrival, finish_by=None, heavy_kg=None) -> list[str]:
     """Return the list of failed rule IDs; empty list = slot is valid."""
+# SlotView = slot + its dock (type, status, max weight) + held_by_shipment (active appointment)
 ```
 
 | Rule | Check |
@@ -294,7 +295,7 @@ Errors show as a one-line message under the input box.
 ## 10. Order of work (outline for `tasks.md`)
 
 1. Skeleton: `pyproject.toml`, `Makefile`, `.env.example`, config + clock, database build. ✅
-2. Scheduling layer, read-only, + its tests (§6). *No LLM needed; ACs 9–11, 14, 18.*
+2. Scheduling layer, read-only, + its tests (§6). ✅
 3. Identity, conversations, input cleaning + tests (§5).
 4. Agent graph, prompt, tools, fake-model test (§7).
 5. Web API + page (§8); walk through AC12 in the browser.

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | In progress — Phase 1 done |
+| Status | In progress — Phases 1–2 done |
 | Implements | [`plan.md`](plan.md) → [`spec.md`](spec.md) |
 
 > Small steps, in order. Each task says what to build, where, and how we know it is done.
@@ -33,29 +33,29 @@
 
 ## Phase 2 — Scheduling layer, read-only (plan §6) — no LLM
 
-- [ ] **T2.0 Read-only connection.** `db.connect_readonly()` opening `file:…?mode=ro` (plan §1, §4.1).
+- [x] **T2.0 Read-only connection.** `db.connect_readonly()` opening `file:…?mode=ro` (plan §1, §4.1).
   *Done when:* an `INSERT` through it raises (R26 by construction).
-- [ ] **T2.1 Shipment queries.** `scheduling/shipments.py`: `RESCHEDULABLE`, `driver_shipments()`
+- [x] **T2.1 Shipment queries.** `scheduling/shipments.py`: `RESCHEDULABLE`, `driver_shipments()`
   with driver labels ("Textiles from Ajmer"), current appointment, baseline and latest ETA,
   `most_recent_other`; `get_own_shipment()`; `coordinator_for()`.
   *Done when:* DRV007 → 2 active; DRV004 → 1 active (SHP1020); DRV006 → 2 active;
   DRV008 → 0 active, most recent other = SHP1019 cancelled (AC16 code part);
   DRV006 + SHP1014 and DRV004 + SHP1004 → `NotAllowed` (AC14, AC14a);
   Jaipur coordinator → +91-141-5001101.
-- [ ] **T2.2 Arrival maths.** `resolve_arrival()` (§6.1).
+- [x] **T2.2 Arrival maths.** `resolve_arrival()` (§6.1).
   *Done when:* SHP1013 + 60 min → 11:00 (AC8); "11:20" → `2026-08-04T11:20+05:30`;
   "9:00" at clock 09:40 → `ArrivalInPast` (AC17).
-- [ ] **T2.3 Slot rules.** `scheduling/rules.py`: `check_slot()` returning failed rule IDs (§6.2).
+- [x] **T2.3 Slot rules.** `scheduling/rules.py`: `check_slot()` returning failed rule IDs (§6.2).
   *Done when:* one small test per rule S1–S7 passes, plus: a 75-min unload in a 60-min slot does
   **not** fail (A7); a slot held by the same shipment passes S5.
-- [ ] **T2.4 Find slots.** `scheduling/slots.py`: `find_slots()` (§6.3).
+- [x] **T2.4 Find slots.** `scheduling/slots.py`: `find_slots()` (§6.3).
   *Done when:*
   - AC9: SHP1006 after 12:00 → D2 12:00, D4 12:00, D1 13:00, D2 13:00, D3 13:00;
   - AC10: SHP1014 → only D2 / D4;
   - AC11: SHP1015, ETA 18:30, clock 16:25 → empty;
   - AC18: SHP1017 from 11:30 → D1 12:00 (`is_current`), D2 12:00, D4 12:00, D1 13:00, D2 13:00;
   - an `earliest_start` in the past → `ArrivalInPast`.
-- [ ] **T2.5 Check a picked slot.** `check_pick()` (§6.4).
+- [x] **T2.5 Check a picked slot.** `check_pick()` (§6.4).
   *Done when:* SHP1006, arrival 11:20, D2 12:00 → valid with the Jaipur coordinator;
   SHP1006, D1 12:00 (held by APT1017) → not valid, with the AC9 alternatives;
   SHP1014, D1 13:00 → not valid (S3).
