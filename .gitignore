@@ -221,3 +221,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local databases (built by make setup / make reset-db)
+data/*.db
+data/*.db-*
