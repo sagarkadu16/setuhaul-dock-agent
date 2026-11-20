@@ -298,8 +298,8 @@ Errors show as a one-line message under the input box.
 2. Scheduling layer, read-only, + its tests (§6). ✅
 3. Identity, conversations, input cleaning + tests (§5). ✅
 4. Agent graph, prompt, tools, fake-model test (§7). ✅
-5. Web API + page (§8); walk through AC12 in the browser.
-6. Manual LLM checks; README (setup, demo script, manual AC list).
+5. Web API + page (§8); walk through AC12 in the browser. ✅ (HTTP; browser check by owner)
+6. Manual LLM checks; README (setup, demo script, manual AC list). ✅
 
 ## 11. Risks and how we handle them
 

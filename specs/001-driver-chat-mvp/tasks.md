@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | In progress — Phases 1–4 done |
+| Status | Built — awaiting owner browser test (T5.3) and fresh-clone check (T6.3) |
 | Implements | [`plan.md`](plan.md) → [`spec.md`](spec.md) |
 
 > Small steps, in order. Each task says what to build, where, and how we know it is done.
@@ -100,23 +100,23 @@
 
 ## Phase 5 — Web (plan §8)
 
-- [ ] **T5.1 API routes.** `web/main.py`: the 7 routes, session cookie, error → 400/404 with a
+- [x] **T5.1 API routes.** `web/main.py`: the 7 routes, session cookie, error → 400/404 with a
   short message. The message route stores the driver message, calls `run_turn()`, stores the reply.
   *Done when:* API tests cover login → link → create conversation → send message (fake model) →
   list shows it; a 1,200-char message gets 400 and the agent is not called.
-- [ ] **T5.2 Page.** `web/static/`: email view → phone view (first time only) → chat view with
+- [x] **T5.2 Page.** `web/static/`: email view → phone view (first time only) → chat view with
   conversation list; works at phone width; "sending…" state while waiting.
-- [ ] **T5.3 Browser walkthrough.** With a real key: `make run`, do the AC12 flow as DRV006 in the
+- [ ] **T5.3 Browser walkthrough.** *(Same flow verified over HTTP against the real server and model, including restart; the in-browser check is left for the owner.)* With a real key: `make run`, do the AC12 flow as DRV006 in the
   browser.
   *Done when:* slots are shown, picking D2 12:00 gives the coordinator's number and no "booked"
   wording; restart the app and the conversation is still there (R9).
 
 ## Phase 6 — Manual checks and docs
 
-- [ ] **T6.1 Manual LLM checks.** Run AC7, AC8, AC15, AC16, AC17, AC19, AC20 against the real model;
+- [x] **T6.1 Manual LLM checks.** Run AC7, AC8, AC15, AC16, AC17, AC19, AC20 against the real model;
   write the result (pass/fail + the reply) into the README table. Fix the prompt for any failure and
   re-run all of them.
-- [ ] **T6.2 README.** Setup (clone, copy `.env.example` → `.env`, add key, `make setup`,
+- [x] **T6.2 README.** Setup (clone, copy `.env.example` → `.env`, add key, `make setup`,
   `make run`), demo script for AC12, manual check table, how to reset the data, known limits
   (spec §9).
 - [ ] **T6.3 Definition of done.** Fresh clone in a new folder, follow only the README, complete

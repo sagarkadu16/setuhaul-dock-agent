@@ -81,7 +81,9 @@ def reset() -> None:
         }
     finally:
         conn.close()
-    print(f"Built {settings.app_db_path.relative_to(REPO_ROOT)}: "
+    path = settings.app_db_path
+    shown = path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
+    print(f"Built {shown}: "
           + ", ".join(f"{n} {t}" for t, n in counts.items()))
 
 

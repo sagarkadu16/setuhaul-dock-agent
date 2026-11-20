@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SetuHaul Driver Chat</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <button id="toggle-list" class="icon-btn" hidden aria-label="Show chats">☰</button>
+    <h1>SetuHaul <span>Driver Chat</span></h1>
+    <div id="who" class="who" hidden>
+      <span id="driver-name"></span>
+      <button id="logout" class="link-btn">Log out</button>
+    </div>
+  </header>
+
+  <!-- Step 1: email -->
+  <main id="view-login" class="card-view" hidden>
+    <form id="login-form" class="card">
+      <h2>Log in</h2>
+      <p class="hint">Enter your email. No password needed.</p>
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="email" required placeholder="you@example.com">
+      <p class="error" id="login-error" role="alert"></p>
+      <button type="submit" class="primary">Continue</button>
+    </form>
+  </main>
+
+  <!-- Step 2: link phone (first time only) -->
+  <main id="view-link" class="card-view" hidden>
+    <form id="link-form" class="card">
+      <h2>Link your phone</h2>
+      <p class="hint">Enter the phone number your transport company has for you. You only do this once.</p>
+      <label for="phone">Phone number</label>
+      <input id="phone" type="tel" autocomplete="tel" required placeholder="+91-90000 10006">
+      <p class="error" id="link-error" role="alert"></p>
+      <button type="submit" class="primary">Link</button>
+    </form>
+  </main>
+
+  <!-- Step 3: chat -->
+  <main id="view-chat" class="chat-layout" hidden>
+    <aside id="sidebar" class="sidebar">
+      <button id="new-chat" class="primary wide">+ New chat</button>
+      <ul id="conversation-list" class="conversation-list"></ul>
+    </aside>
+    <section class="chat">
+      <div id="messages" class="messages" aria-live="polite"></div>
+      <form id="send-form" class="composer">
+        <textarea id="text" rows="1" maxlength="1000" placeholder="Type a message…" disabled></textarea>
+        <button type="submit" id="send" class="primary" disabled>Send</button>
+      </form>
+      <p class="error composer-error" id="send-error" role="alert"></p>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
