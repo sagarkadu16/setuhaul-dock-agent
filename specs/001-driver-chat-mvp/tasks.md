@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | In progress — Phases 1–2 done |
+| Status | In progress — Phases 1–3 done |
 | Implements | [`plan.md`](plan.md) → [`spec.md`](spec.md) |
 
 > Small steps, in order. Each task says what to build, where, and how we know it is done.
@@ -62,16 +62,17 @@
 
 ## Phase 3 — Identity, conversations, input (plan §5)
 
-- [ ] **T3.1 Login.** `identity.login()`.
+- [x] **T3.1 Login.** `identity.login()`.
   *Done when:* AC1 (` Manoj@Test.com ` twice → one user) and AC2 (`manoj@` rejected) pass.
-- [ ] **T3.2 Link phone.** `identity.link_phone()`.
+- [x] **T3.2 Link phone.** `identity.link_phone()`.
   *Done when:* AC3, AC3a, AC4, AC4a pass, and a second link attempt by the same user is refused (R4b).
-- [ ] **T3.3 Ownership helper.** `identity.require_driver(user)` and
+- [x] **T3.3 Ownership helper.** `identity.require_driver(user)` and
   `conversations.require_owner(thread_id, driver_id)`.
   *Done when:* opening another driver's thread raises `NotFound` (not "forbidden", so IDs don't leak).
-- [ ] **T3.4 Conversations.** `conversations.py`: list (newest first, with preview), open, create,
+- [x] **T3.4 Conversations.** `conversations.py`: list (newest first, with preview), open, create,
   append message (§5.2).
-  *Done when:* AC5 passes using a fresh connection after creating 2 conversations.- [ ] **T3.5 Input cleaning.** [P] `input_clean.clean_message()` (§5.3).
+  *Done when:* AC5 passes using a fresh connection after creating 2 conversations.
+- [x] **T3.5 Input cleaning.** [P] `input_clean.clean_message()` (§5.3).
   *Done when:* AC6 ("   " and 1,200 chars rejected), control characters removed, and
   "Reaching 11:20 , tyre burst!!" comes back unchanged.
 
