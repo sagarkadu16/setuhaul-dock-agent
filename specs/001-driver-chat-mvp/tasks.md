@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Ready to start |
+| Status | In progress — Phase 1 done |
 | Implements | [`plan.md`](plan.md) → [`spec.md`](spec.md) |
 
 > Small steps, in order. Each task says what to build, where, and how we know it is done.
@@ -13,21 +13,21 @@
 
 ## Phase 1 — Skeleton (plan §2–§4)
 
-- [ ] **T1.1 Project files.** `pyproject.toml` (pinned: fastapi, uvicorn, langgraph,
+- [x] **T1.1 Project files.** `pyproject.toml` (pinned: fastapi, uvicorn, langgraph,
   langgraph-checkpoint-sqlite, langchain-openai, python-dotenv, itsdangerous, email-validator;
   dev: pytest, httpx), `Makefile` with `setup`, `run`, `test`, `reset-db`, `.env.example`.
   Add `data/*.db` to `.gitignore`.
   *Done when:* `make setup` creates `.venv` and installs everything on a clean clone.
-- [ ] **T1.2 Config and clock.** `app/config.py`: settings from `.env`; `clock.now()` returns
+- [x] **T1.2 Config and clock.** `app/config.py`: settings from `.env`; `clock.now()` returns
   `APP_CLOCK` (default `2026-08-04T09:40:00+05:30`); tests can override it.
   *Done when:* a unit test sets the clock to 16:25 and reads it back.
-- [ ] **T1.3 Seed + migration.** Copy `setuhaul_schema_and_seed.sql` to `data/seed/`; write
+- [x] **T1.3 Seed + migration.** Copy `setuhaul_schema_and_seed.sql` to `data/seed/`; write
   `data/migrations/001_users.sql` (§4.2).
-- [ ] **T1.4 Database build.** `app/db.py`: `build_db(path)` runs seed then migrations;
+- [x] **T1.4 Database build.** `app/db.py`: `build_db(path)` runs seed then migrations;
   `connect()` sets `foreign_keys` and `busy_timeout`. `make setup` / `make reset-db` call it.
   *Done when:* `make reset-db` produces `data/app.db` with 21 shipments, 106 slots, 20 appointments
   and an empty `app_users` table.
-- [ ] **T1.5 Test fixtures.** `tests/conftest.py`: build the DB once per session, copy per test,
+- [x] **T1.5 Test fixtures.** `tests/conftest.py`: build the DB once per session, copy per test,
   fixed-clock fixture, helper to set a different clock.
   *Done when:* two tests that write to the DB don't see each other's changes.
 
