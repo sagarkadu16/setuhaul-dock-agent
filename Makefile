@@ -15,7 +15,7 @@ $(VENV)/.installed: pyproject.toml
 
 .env:
 	cp .env.example .env
-	@echo ">> Created .env - add your OPENAI_API_KEY to it."
+	@echo ">> Created .env - add your LLM_API_KEY (OpenRouter key) to it."
 
 ## run: start the web app on http://127.0.0.1:8000
 run:

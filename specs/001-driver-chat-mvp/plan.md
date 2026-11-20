@@ -1,9 +1,9 @@
-# Plan 001 — Driver chat MVP
+# Plan 001 — Driver chat MVP (show slots)
 
 | | |
 |---|---|
-| Status | Approved — decisions D1–D3 confirmed |
-| Implements | [`spec.md`](spec.md) (v3) |
+| Status | Approved v2 — updated for spec v4 (show slots, no booking) |
+| Implements | [`spec.md`](spec.md) (v4) |
 | Next | `tasks.md` |
 
 > This file says **how** we build what `spec.md` asks for. Requirement IDs (R…, S…, AC…) point back
@@ -17,20 +17,24 @@
 Browser (one HTML page + small JS)
    │  JSON over HTTP, session cookie
    ▼
-FastAPI app ──────────────► identity      (R1–R5)
-   │                        conversations (R6–R9)
+FastAPI app ──────────────► identity      (R1–R5)        ─┐ read/write:
+   │                        conversations (R6–R9)        ─┘ app_users, chat_threads, chat_messages
    │                        input_clean   (R10–R11)
    ▼
-LangGraph agent  ── tools ─► scheduling   (S1–S7, R21–R25)  ◄── deterministic, no LLM
+LangGraph agent  ── tools ─► scheduling   (S1–S7, R24)   ◄── deterministic, no LLM, READ-ONLY
    │                             │
    ▼                             ▼
-OpenAI chat model          SQLite: data/app.db  (seed data + our tables)
+LLM via OpenRouter         SQLite: data/app.db  (seed data + our tables)
                            SQLite: data/checkpoints.db (agent memory)
 ```
 
 **The one rule that shapes everything:** the LLM talks and picks *which* tool to call. Code decides
-which slots are valid, computes times, checks ownership and writes bookings. The LLM never sees a
-slot it could book that code did not return (R15), and it cannot pass a driver ID (R5).
+which slots are valid, computes times and checks ownership. The LLM never shows a slot that code did
+not return (R15), and it cannot pass a driver ID (R5).
+
+**Read-only by construction (R26):** the scheduling layer opens SQLite in read-only mode
+(`mode=ro`), so it *cannot* write to shipments, appointments, slots or ETAs even by mistake. Only
+`identity` and `conversations` open writable connections, and they touch only their own tables.
 
 ## 2. Tech choices
 
@@ -39,36 +43,36 @@ slot it could book that code did not return (R15), and it cannot pass a driver I
 | Language | Python 3.12+ | LangGraph's home language; local machine has 3.14 |
 | Web | FastAPI + Uvicorn, one static HTML/JS page | Smallest thing that gives a real browser flow; no frontend build step |
 | Sessions | Starlette `SessionMiddleware` (signed cookie holding `user_id`) | Identification only (A1); no auth library needed |
-| Agent | LangGraph: agent node ⇄ tool node loop, OpenAI chat model via `langchain-openai` | Matches README; graph is small enough to read in one sitting |
-| Agent memory | `langgraph-checkpoint-sqlite`, `thread_id` = conversation ID | Keeps tool calls/results (e.g. offered slot IDs) across turns and restarts |
-| Database | SQLite, built from the seed SQL plus one migration | Seed data already enforces the key constraints (one active booking per slot) |
+| Agent | LangGraph: agent node ⇄ tool node loop; chat model via `langchain-openai` pointed at OpenRouter | Matches README; graph is small enough to read in one sitting |
+| LLM provider | OpenRouter (OpenAI-compatible API); base URL is configurable | Owner has an OpenRouter key; switching provider is a `.env` change only |
+| Agent memory | `langgraph-checkpoint-sqlite`, `thread_id` = conversation ID | Keeps tool calls/results (e.g. shown slots) across turns and restarts |
+| Database | SQLite, built from the seed SQL plus one migration | Seed data and views (`v_latest_eta`, `v_slot_availability`) are ready to query |
 | Tests | pytest + FastAPI `TestClient` + a scripted fake chat model | Every AC except the LLM-judgement ones runs offline and free |
 | Setup | `Makefile` + `venv` + `pip` (uv is not installed locally) | Gives the spec's "two commands": `make setup`, `make run` |
 
-Model name, API key, clock and paths come from `.env` (template in `.env.example`). The default model
-is a current small, cheap OpenAI chat model with tool calling, pinned when the code is written.
+Model name, API key, base URL, clock and paths come from `.env` (template in `.env.example`). The
+model is a small, cheap OpenRouter model that supports tool calling, pinned in T4.1.
 
 ## 3. Repository layout
 
 ```
 Makefile                    setup / run / test / reset-db
 pyproject.toml
-.env.example                OPENAI_API_KEY, OPENAI_MODEL, APP_CLOCK, SESSION_SECRET
+.env.example                LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, APP_CLOCK, SESSION_SECRET
 data/
   seed/setuhaul_schema_and_seed.sql   copied unchanged from the data package
   migrations/001_users.sql            our additions (§4.2)
   app.db, checkpoints.db              built locally, git-ignored
 app/
   config.py                 settings + clock.now()               (A3)
-  db.py                     connections, build/reset database
+  db.py                     connections (read-write and read-only), build/reset database
   identity.py               login, link phone, ownership checks   (R1–R5)
   conversations.py          list / open / create / append         (R6–R9)
   input_clean.py            clean_message()                       (R10–R11)
-  scheduling/
-    shipments.py            active shipments, labels, arrival maths
+  scheduling/               all read-only
+    shipments.py            active shipments, labels, arrival maths, coordinator contact
     rules.py                pure slot rules S1–S7
-    slots.py                find_slots()
-    booking.py              book_slot(), record_eta()             (R21–R25)
+    slots.py                find_slots(), check_pick()
   agent/
     prompt.py               system prompt builder
     tools.py                LangChain tools wrapping scheduling/*
@@ -78,13 +82,14 @@ app/
     static/index.html, app.js, style.css
 tests/
   conftest.py               fresh DB copy per test, fixed clock, fake LLM
+  test_setup.py             Phase 1 checks
   test_identity.py          AC1–AC4a
   test_conversations.py     AC5
   test_input_clean.py       AC6
-  test_shipments.py         AC8 / AC17 maths, AC16 lookup, active definition
-  test_slots.py             AC9, AC10, AC11, AC18
-  test_booking.py           AC12, AC12a, AC13, AC14, AC14a
-  test_agent_flow.py        AC12 end to end with scripted fake model
+  test_shipments.py         AC8 / AC17 maths, AC16 lookup, active definition, coordinator
+  test_rules.py             S1–S7 one by one
+  test_slots.py             AC9, AC10, AC11, AC14, AC14a, AC18, check_pick
+  test_agent_flow.py        AC12 + AC21 end to end with scripted fake model
 ```
 
 ## 4. Data
@@ -92,7 +97,8 @@ tests/
 ### 4.1 Building the database
 - `make setup` (and `make reset-db`) runs the seed SQL, then everything in `data/migrations/`, into
   `data/app.db`. The original package `.db` is never written to.
-- Every connection sets `PRAGMA foreign_keys = ON` and `PRAGMA busy_timeout = 5000`.
+- `connect()` opens read-write; `connect_readonly()` opens with `file:…?mode=ro` (§1).
+  Both set `PRAGMA foreign_keys = ON` and `PRAGMA busy_timeout = 5000`.
 - Tests build the database once per test session in a temp folder, then copy the file for each test,
   so every test starts from the seed state (spec §7).
 
@@ -117,24 +123,22 @@ There is no "unlink" statement anywhere in the code (R4b).
 |---|---|---|
 | Conversations (R6–R8) | `chat_threads` | One row per conversation. Owner = `driver_id` (1 user ↔ 1 driver, permanently). New rows: `thread_status='OPEN'`, `thread_intent='UNKNOWN'`, `shipment_id` filled in once known. |
 | Messages (R9) | `chat_messages` | `sender_type` `DRIVER` or `AGENT`. Seed threads for a driver also show up as history, which is realistic. |
-| Arrival time (R25) | `eta_updates` + `shipments.latest_eta_ts` | `source_type='DRIVER_DECLARED'`, `confidence_code='HIGH'` (driver confirmed), `delay_reason_code` from the conversation if clear, else `OTHER`. |
-| Bookings (R21) | `appointments` | See §6.3. |
+| Shipments, ETAs, slots, appointments | `shipments`, `v_latest_eta`, `appointment_slots`, `docks`, `appointments`, `facility_rules` | **Read only.** |
+| Coordinator contact (R13a, R16, R18) | `facility_contacts` | `contact_role='WAREHOUSE_COORDINATOR'` for the shipment's destination (Jaipur: CON001, +91-141-5001101). |
 
 Using the seed chat tables means ownership (R5) is one check everywhere: *row's `driver_id` = session
 user's `driver_id`*.
 
 ### 4.4 Time
 - **Scheduling time** (`clock.now()`): fixed at `APP_CLOCK`, default `2026-08-04T09:40:00+05:30` (A3).
-  Used for every rule and every operational timestamp (`booked_at`, `eta_updates.created_at`…).
-  Tests can override it per test (AC11 uses 16:25).
+  Used by every rule. Tests can override it per test (AC11 uses 16:25).
 - **Chat timestamps** (`message_ts`, `opened_at`): real wall clock. With a frozen clock every
   conversation would have the same time and "newest first" (R6) would not work. All are stored as
   ISO-8601 with `+05:30`.
 - All comparisons parse to `datetime`; nothing compares timestamp strings.
 
 ### 4.5 IDs
-New rows get prefixed short IDs: `USR-…`, `THR-…`, `MSG-…`, `ETA-…`, `APT-…` (prefix + 8 hex chars
-from `uuid4`).
+New rows get prefixed short IDs: `USR-…`, `THR-…`, `MSG-…` (prefix + 8 hex chars from `uuid4`).
 
 ## 5. Login, conversations and input
 
@@ -162,7 +166,7 @@ from `uuid4`).
 Nothing else: no case change, spelling fix or translation (R11). Rejected messages are not stored and
 never reach the agent (AC6); the API returns 400 with a driver-friendly message.
 
-## 6. Scheduling layer (deterministic)
+## 6. Scheduling layer (deterministic, read-only)
 
 ### 6.1 Shipments (`scheduling/shipments.py`)
 - `RESCHEDULABLE = {PLANNED, ASSIGNED, IN_TRANSIT}` (spec §5).
@@ -172,14 +176,17 @@ never reach the agent (AC6); the API returns 400 with a driver-friendly message.
     (`v_latest_eta.effective_eta_ts`), current appointment (dock code + time) if any;
   - `most_recent_other`: if `active` is empty, the latest non-reschedulable shipment with its status
     (R20a, AC16: DRV008 → SHP1019 cancelled).
+- `get_own_shipment(driver_id, shipment_id)`: the shipment if it is the driver's and reschedulable,
+  else `NotAllowed` (R24, AC14, AC14a).
 - `resolve_arrival(shipment, *, clock_time=None, delay_minutes=None)`:
   - `clock_time` "11:20" → that time today (A3);
   - `delay_minutes` 60 → baseline ETA + 60 min (AC8: 10:00 → 11:00);
   - result earlier than `clock.now()` → `ArrivalInPast` (AC17).
   The LLM pulls the numbers out of the driver's words; **code does the maths**.
+- `coordinator_for(facility_id)`: name and phone of the warehouse coordinator.
 
 ### 6.2 Slot rules (`scheduling/rules.py`)
-One pure function used by both search and booking, so R23 re-uses exactly the same rules:
+One pure function, used for listing slots and for checking a slot the driver picked:
 
 ```python
 def check_slot(shipment, slot, dock, *, arrival, finish_by, held_by, facility_rules) -> list[str]:
@@ -199,44 +206,21 @@ def check_slot(shipment, slot, dock, *, arrival, finish_by, held_by, facility_ru
 A7: unload time longer than the slot is **not** a rule failure.
 
 ### 6.3 Finding slots (`find_slots`)
-- One query: slots at the destination facility from `arrival` onward, joined to `docks` and to the
-  active appointment (same join as `v_slot_availability`).
+- `find_slots(driver_id, shipment_id, earliest_start, finish_by=None)`. `earliest_start` is the later
+  of the confirmed arrival time and any "after 12" the driver asked for (AC9). It must not be in the
+  past.
+- One query: slots at the destination facility from `earliest_start` onward, joined to `docks` and to
+  the active appointment (same join as `v_slot_availability`).
 - Filter with `check_slot`, sort by `(slot_start_ts, dock_code)`, take 5.
 - Each result: `slot_id`, `dock_code`, start, end, and `is_current: bool` (Q2 / AC18).
 - Expected results, checked by tests: AC9, AC10 (D2/D4 only), AC11 (empty), AC18.
 
-### 6.4 Booking (`book_slot`) — R21–R24
-
-```
-book_slot(driver_id, shipment_id, slot_id, finish_by=None) -> BookingResult
-  BEGIN IMMEDIATE                      -- takes the write lock up front
-    shipment must belong to driver_id and be reschedulable      → else NOT_ALLOWED (R24)
-    current = current active appointment of shipment
-    if current.slot_id == slot_id                                → ALREADY_YOURS (R21a)
-    arrival = latest ETA for shipment (recorded earlier, R25)
-    failed = check_slot(... re-read now ...)                     → S5 failed: SLOT_TAKEN
-                                                                   other:     RULE_FAILED (R23)
-    UPDATE current  SET appointment_status='CANCELLED', is_current=0,
-                        cancelled_at=now, cancellation_reason='Replaced by driver rebooking'
-    INSERT new      appointment_status='CONFIRMED', booking_source='DRIVER_CHAT',
-                    is_current=1, booked_at=now, confirmed_at=now (A2),
-                    replaced_appointment_id=current.appointment_id
-  COMMIT
-  sqlite3.IntegrityError on ux_active_appointment_per_slot      → ROLLBACK, SLOT_TAKEN
-```
-
-- The old row is updated **before** the insert, because the seed has a unique index allowing only
-  one current active appointment per shipment.
-- `SLOT_TAKEN` results carry up to 5 fresh alternatives from `find_slots` (R22).
-- Two layers protect against double booking (AC13): `BEGIN IMMEDIATE` makes writers queue, so the
-  second one sees the first one's row and fails S5; the unique index catches anything that slips past.
-- `BookingResult` = `status`, `appointment_id`, `dock_code`, `slot_start`, `released_appointment_id`,
-  `alternatives`, `reason`.
-
-### 6.5 Recording the arrival time (`record_eta`) — R25
-Inserts into `eta_updates` and updates `shipments.latest_eta_ts` / `updated_at` in one transaction.
-Called when the driver confirms the time, before slots are searched, so AC11 records 18:30 even
-though nothing is booked.
+### 6.4 Checking a picked slot (`check_pick`) — R16, edge case "slot not shown"
+- `check_pick(driver_id, shipment_id, dock_code, start_time, arrival, finish_by=None)` finds that slot
+  and runs `check_slot`.
+- Valid → `{valid: true, dock, start, coordinator}` so the agent can repeat the choice and hand over
+  (R16). Not valid → `{valid: false, reason, alternatives: find_slots(...)}`.
+- Nothing is written (R26).
 
 ## 7. Agent
 
@@ -248,14 +232,15 @@ back to agent, until the model replies without a tool call. Checkpointed by conv
 
 ### 7.2 What the model is given every turn
 The system prompt is rebuilt each turn from fresh data, so the model never has to ask for what the
-system knows (R14) and often needs no lookup tool:
+system knows (R14):
 - current time (`clock.now()`), driver's first name;
 - the driver's active shipments with labels, current slot, baseline and latest ETA — or the
   most-recent-other shipment and its status (R20a);
-- the destination's warehouse coordinator name and phone (R13a);
-- the behaviour rules from spec §6.4, written as short instructions (one question at a time, suggest
-  the answer, only two things may be asked, give up after two unclear answers, stay on topic, never
-  claim a booking unless `book_slot` returned `BOOKED`, short phone-friendly replies).
+- the destination's warehouse coordinator name and phone (R13a, R16, R18);
+- the behaviour rules from spec §6.4, written as short instructions: one question at a time, suggest
+  the answer, only two things may be asked, give up after two unclear answers, stay on topic, short
+  phone-friendly replies, and **never say a slot is booked, reserved or held — say it is available
+  now and must be confirmed by phone** (R17).
 
 ### 7.3 Tools
 The driver ID comes from the run config (`config["configurable"]["driver_id"]`), never from the
@@ -264,19 +249,15 @@ model's arguments, so the model cannot act for another driver (R5, R24).
 | Tool | Arguments from the model | Does |
 |---|---|---|
 | `resolve_arrival` | `shipment_id`, `clock_time` *or* `delay_minutes` | §6.1 maths; returns exact time or "in the past" |
-| `record_arrival` | `shipment_id`, `arrival_time`, `reason?` | §6.5, only after the driver confirms the time |
-| `find_slots` | `shipment_id`, `start_after?`, `finish_by?` | §6.3; arrival = recorded ETA, or `start_after` if later (AC9 "any slot after 12") |
-| `book_slot` | `shipment_id`, `slot_id`, `finish_by?` | §6.4 |
+| `find_slots` | `shipment_id`, `earliest_start`, `finish_by?` | §6.3 |
+| `check_pick` | `shipment_id`, `dock_code`, `start_time`, `arrival`, `finish_by?` | §6.4 |
 
 Every tool checks ownership again and returns plain JSON. Tool errors are returned to the model as
-short messages ("That shipment is not yours"), not raised.
+short messages ("That shipment is not yours"), not raised. There is no tool that writes.
 
 ### 7.4 Failure handling (spec §8)
-- Model call timeout 30 s, one retry. On any model or graph error the driver gets
-  "Sorry, I can't respond right now, please try again", which is stored as the agent message.
-- If `book_slot` already returned `BOOKED` during that turn, the fallback reply is instead a
-  confirmation built by code ("Booked: dock D2 at 12:00."), so the driver is never told "sorry"
-  about a booking that happened (R17 in both directions).
+Model call timeout 30 s, one retry. On any model or graph error the driver gets
+"Sorry, I can't respond right now, please try again", which is stored as the agent message.
 
 ## 8. Web layer
 
@@ -302,9 +283,9 @@ Errors show as a one-line message under the input box.
 | AC5 | `test_conversations.py` | create 2 conversations, open a **new** connection/app instance, list |
 | AC6 | `test_input_clean.py` | also asserts the agent function was never called |
 | AC9, AC10, AC11, AC18 | `test_slots.py` | exact expected slot IDs and order |
-| AC12, AC12a, AC14, AC14a | `test_booking.py` | checks DB rows: new `CONFIRMED`, APT1006 `CANCELLED`/not current, `replaced_appointment_id` set |
-| AC13 | `test_booking.py` | 10 threads, own connections, a `threading.Barrier`, then count results |
-| AC12 end to end | `test_agent_flow.py` | scripted fake model emits the tool calls; checks reply text and DB |
+| AC14, AC14a | `test_slots.py` | `find_slots` / `check_pick` raise `NotAllowed` |
+| AC12, AC21 | `test_agent_flow.py` | scripted fake model emits the tool calls; reply names D2 12:00 and +91-141-5001101; snapshot of shipments, appointments, slots and ETA tables is identical before and after |
+| R26 by construction | `test_slots.py` | a write through `connect_readonly()` raises |
 | AC8, AC16, AC17 (code parts) | `test_shipments.py` | arrival maths, past-time error, most-recent-other lookup |
 | AC7, AC8, AC15, AC16, AC17, AC19, AC20 | **manual**, real model | script listed in README with expected behaviour |
 
@@ -312,8 +293,8 @@ Errors show as a one-line message under the input box.
 
 ## 10. Order of work (outline for `tasks.md`)
 
-1. Skeleton: `pyproject.toml`, `Makefile`, `.env.example`, config + clock, database build. *(nothing to demo yet)*
-2. Scheduling layer + its tests (§6). *Biggest risk, no LLM needed, ACs 9–14, 18.*
+1. Skeleton: `pyproject.toml`, `Makefile`, `.env.example`, config + clock, database build. ✅
+2. Scheduling layer, read-only, + its tests (§6). *No LLM needed; ACs 9–11, 14, 18.*
 3. Identity, conversations, input cleaning + tests (§5).
 4. Agent graph, prompt, tools, fake-model test (§7).
 5. Web API + page (§8); walk through AC12 in the browser.
@@ -323,10 +304,11 @@ Errors show as a one-line message under the input box.
 
 | Risk | Mitigation |
 |---|---|
-| Model books without a clear choice (R16) or claims a booking that failed (R17) | Prompt rules + manual checks; R17 also enforced in code for the failure path (§7.4). A later spec could add a "confirm" button. |
+| Model says "booked" or "reserved" (R17) | Prompt rule + no booking tool exists + manual check in AC12; the fake-model test checks the scripted reply. |
+| Driver thinks the shown slot is held, then it is gone when they call | Agent wording says "available now"; booking and holding are spec 002. |
 | Model gets time maths wrong | It never does maths: `resolve_arrival` does (§6.1). |
 | LangGraph / LangChain API changes between versions | Pin versions in `pyproject.toml`; the graph is small and hand-built. |
-| SQLite "database is locked" under parallel requests | `busy_timeout`, short transactions, one connection per request/thread. |
+| SQLite "database is locked" under parallel requests | `busy_timeout`, short transactions, one connection per request/thread; scheduling only reads. |
 | Seed chat history confuses the model | History is only shown in the UI; the agent's memory starts empty for each new conversation. |
 
 ## 12. Decisions (confirmed)
@@ -335,4 +317,7 @@ Errors show as a one-line message under the input box.
   tables (§4.3). Side effect: drivers with seeded threads see them as past conversations.
 - **D2. ✅** Chat timestamps use the real clock; everything operational uses the fixed clock (§4.4).
 - **D3. ✅** A plain HTML/JS page instead of Streamlit or a React app (§8).
-- **Still open:** the exact OpenAI model name, pinned in `.env.example` when task T4.1 is done.
+- **D4. ✅** LLM provider is OpenRouter through its OpenAI-compatible API (`LLM_BASE_URL`).
+- **D5. ✅** Show slots only; scheduling is read-only; booking design kept for spec 002 (plan v1 in
+  git history, commit `062fc38`).
+- **Still open:** the exact model name, pinned in `.env.example` when task T4.1 is done.

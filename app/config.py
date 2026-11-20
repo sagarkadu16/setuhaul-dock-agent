@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 REPO_ROOT = Path(__file__).resolve().parent.parent
 IST = timezone(timedelta(hours=5, minutes=30), name="IST")
 DEFAULT_CLOCK = "2026-08-04T09:40:00+05:30"
+DEFAULT_LLM_BASE_URL = "https://openrouter.ai/api/v1"  # any OpenAI-compatible API works
 
 load_dotenv(REPO_ROOT / ".env")
 
@@ -36,8 +37,9 @@ def _path(env_name: str, default: str) -> Path:
 
 @dataclass(frozen=True)
 class Settings:
-    openai_api_key: str
-    openai_model: str
+    llm_api_key: str
+    llm_base_url: str
+    llm_model: str
     app_clock: datetime
     session_secret: str
     app_db_path: Path
@@ -46,8 +48,9 @@ class Settings:
 
 def load_settings() -> Settings:
     return Settings(
-        openai_api_key=os.getenv("OPENAI_API_KEY", ""),
-        openai_model=os.getenv("OPENAI_MODEL", ""),
+        llm_api_key=os.getenv("LLM_API_KEY", ""),
+        llm_base_url=os.getenv("LLM_BASE_URL") or DEFAULT_LLM_BASE_URL,
+        llm_model=os.getenv("LLM_MODEL", ""),
         app_clock=parse_ts(os.getenv("APP_CLOCK") or DEFAULT_CLOCK),
         session_secret=os.getenv("SESSION_SECRET") or "change-me",
         app_db_path=_path("APP_DB_PATH", "data/app.db"),

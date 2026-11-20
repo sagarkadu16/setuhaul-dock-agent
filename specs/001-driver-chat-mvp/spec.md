@@ -1,11 +1,11 @@
-# Spec 001 — Driver chat MVP
+# Spec 001 — Driver chat MVP (show slots)
 
 | | |
 |---|---|
-| Status | Approved v3 — review comments applied, open questions decided |
+| Status | Approved v4 — scope cut to showing slots; booking moved to spec 002 |
 | Owner | Sagar |
 | Depends on | `specs/000-constitution.md` (optional for this MVP) |
-| Next | `plan.md` (how), `tasks.md` (steps) |
+| Next | `plan.md` (how), `tasks.md` (steps); booking is [`../002-booking/spec.md`](../002-booking/spec.md) |
 
 > This file says **what** the system must do and **why**. It contains no implementation details.
 > Anything about libraries, tables or code belongs in `plan.md`.
@@ -15,20 +15,23 @@
 ## 1. Problem
 
 Truck drivers heading to the SetuHaul Jaipur Distribution Centre often run late. Today they have no
-simple way to say "I'm late" and get a new unloading slot, so they arrive and wait, or miss their dock
-entirely. We need a chat where a driver describes the delay in plain English, gets clarifying
-questions when needed, sees the slots that actually work for their truck, picks one, and gets it
-booked.
+simple way to say "I'm late" and find out which unloading slots still work for them, so they arrive
+and wait, or miss their dock entirely. We need a chat where a driver describes the delay in plain
+English, gets clarifying questions when needed, and sees the slots that actually work for their truck.
+
+Booking the chosen slot from the chat is the next step and is covered by spec 002. In this MVP the
+driver confirms the slot by phone with the warehouse.
 
 ## 2. Goal of this MVP
 
 One working end-to-end path:
 
 **log in with email → see past chats → describe a delay → answer follow-up questions → see valid slots
-→ pick one → slot is booked in the database → driver gets a confirmation message.**
+→ pick one → get the warehouse coordinator's number to confirm it.**
 
-Speed of learning matters more than completeness. Every later feature (warehouse approval, priority
-rules, breakdown handling) builds on this path.
+The app **does not change any operational data** (shipments, appointments, ETAs). It only stores
+users and chat messages. Speed of learning matters more than completeness; booking, warehouse
+approval, priority rules and breakdown handling build on this path.
 
 ## 3. Actors
 
@@ -36,16 +39,15 @@ rules, breakdown handling) builds on this path.
 |---|---|
 | Truck driver | Uses the chat UI |
 | Chat agent (LLM) | Talks to the driver, asks follow-up questions, calls tools |
-| Booking logic (deterministic code) | Decides which slots are valid and writes the booking |
-| Warehouse / ops | **Not involved** — bookings are auto-approved (see A2) |
+| Slot logic (deterministic code) | Decides which slots are valid for a shipment; read-only |
+| Warehouse coordinator | Not in the app — the driver calls them to confirm a slot |
 
 ## 4. Assumptions
 
 - **A1 — Email login is identification, not security.** Anyone who knows an email can log in. This is
   acceptable for a local prototype only.
-- **A2 — Auto-approval.** If the booking logic accepts a slot, it is confirmed immediately. No warehouse
-  confirmation step in this MVP. An existing appointment that is still *pending confirmation* is
-  treated like any other current appointment: rebooking releases it.
+- **A2 — No booking in the app.** *(Moved to spec 002: auto-approval of bookings.)* Slots shown are a
+  snapshot; one may be taken by someone else before the driver calls.
 - **A3 — Fixed clock.** The data is a snapshot of 4 Aug 2026. The system uses a configurable "current
   time" (default `2026-08-04T09:40:00+05:30`) instead of the real clock. All times the driver says
   ("11:20", "1 pm") are read as that same day in Asia/Kolkata.
@@ -55,8 +57,8 @@ rules, breakdown handling) builds on this path.
 - **A6 — Slot status already reflects dock events.** Breakdowns and maintenance in the seed data are
   already applied as blocked slots, so the MVP relies on slot status alone.
 - **A7 — Long unloads are allowed to overrun.** Some loads need longer to unload than one slot
-  (e.g. 75 min in a 60-min slot). In this MVP such a slot is still offered; handling the overrun is
-  a later spec (see §8). The finish-by rule (S7) still uses the real unload time.
+  (e.g. 75 min in a 60-min slot). In this MVP such a slot is still shown; handling the overrun is
+  a later spec (see §9). The finish-by rule (S7) still uses the real unload time.
 
 ## 5. Definitions
 
@@ -84,7 +86,7 @@ rules, breakdown handling) builds on this path.
   driver is rejected with a message to contact dispatch.
 - **R4b.** A link between an email and a driver is permanent. There is no way to unlink or relink it
   in the app; a wrong link is fixed by an admin outside the app.
-- **R5.** A user can only see and act on their own conversations and their own driver's shipments.
+- **R5.** A user can only see their own conversations and slots for their own driver's shipments.
 
 ### 6.2 Conversations
 - **R6.** After login, the user sees a list of their past conversations, newest first.
@@ -114,26 +116,28 @@ rules, breakdown handling) builds on this path.
       (DRV013, planned 10:00, "late by one hour" → "So you will reach at about 11:00?").
   - **Work things out instead of asking** whenever one message gives enough, e.g. "the Jaipur one,
     reaching 11:20" answers both questions at once.
-  - When offering slots, the agent adds one short line such as "Tell me if you must finish by a
+  - When showing slots, the agent adds one short line such as "Tell me if you must finish by a
     certain time." instead of asking about constraints.
 - **R13a.** If the driver still has not given a clear answer after being asked for the same thing
   twice, the agent stops asking and suggests calling the destination facility's warehouse
   coordinator, giving their phone number (Jaipur: +91-141-5001101).
 - **R14.** The agent never asks for information the system already has (load type, weight, facility,
   current slot).
-- **R15.** The agent only offers slots returned by the booking logic. It never invents or edits a slot.
-- **R16.** The agent books a slot only after the driver clearly chooses one.
-- **R17.** The agent tells the driver a slot is booked **only** if the booking step reported success.
-- **R18.** If no valid slot exists, the agent says so plainly and does not book anything.
-- **R19.** The agent stays on topic (delays, slots, bookings). Off-topic requests get a short polite
-  refusal.
+- **R15.** The agent only shows slots returned by the slot logic. It never invents or edits a slot.
+- **R16.** When the driver picks a slot, the agent repeats the choice (dock and time) and gives the
+  destination warehouse coordinator's name and phone number to confirm it.
+  *(Booking from the chat: moved to spec 002.)*
+- **R17.** The agent never says or implies that a slot is booked, reserved or held. It says the slot
+  is *available now* and must be confirmed by phone.
+- **R18.** If no valid slot exists, the agent says so plainly and gives the coordinator's number.
+- **R19.** The agent stays on topic (delays, slots). Off-topic requests get a short polite refusal.
 - **R20.** Replies are short, simple English suitable for a driver on a phone.
 - **R20a.** If the driver has no active shipment, the agent looks at their most recent shipment and
   explains its status (e.g. cancelled → "This shipment was cancelled. Please contact dispatch.").
-  It does not offer slots.
+  It does not show slots.
 
 ### 6.5 Slot rules (decided by code, not the LLM)
-A slot is offered for a shipment only if **all** are true:
+A slot is shown for a shipment only if **all** are true:
 - **S1.** The slot belongs to the shipment's destination facility.
 - **S2.** The dock type matches the load: temperature-controlled → reefer dock; heavy load (above the
   facility's heavy-weight rule, or marked heavy) → heavy dock; otherwise → standard dock.
@@ -147,19 +151,12 @@ A slot is offered for a shipment only if **all** are true:
 Slots are listed earliest start first, then by dock code, max 5. If the shipment's current slot
 passes all rules, it is included in its normal place in the list and marked "your current slot".
 
-### 6.6 Booking
-- **R21.** Booking a slot makes it the shipment's current appointment and releases the shipment's
-  previous current appointment, if it has one, as one all-or-nothing change. The released appointment
-  stays in history, marked as replaced by the new one.
-- **R21a.** If the driver picks the slot they already hold, nothing changes and the agent tells them
-  it is already their slot.
-- **R22.** Two drivers can never hold the same slot. If two book the same slot at the same moment,
-  exactly one succeeds; the other is told the slot was just taken and is offered alternatives.
-- **R23.** Booking re-checks all slot rules at the moment of booking (the slot may have changed since it
-  was offered).
-- **R24.** A driver cannot book for a shipment that is not theirs or not reschedulable.
-- **R25.** The new arrival time is recorded as soon as the driver confirms it, whether or not a slot
-  is later booked.
+### 6.6 Read-only guarantee
+- **R24.** Slots can only be looked up for a shipment that is the driver's own and reschedulable.
+- **R26.** No conversation changes shipments, appointments, slots or ETA records. The only data the
+  app writes is users and chat messages.
+- *R21–R23 (booking, double-booking protection, re-check at booking time) and R25 (recording the new
+  arrival time): moved to spec 002.*
 
 ## 7. Acceptance criteria
 
@@ -178,37 +175,40 @@ fresh copy of the seed data.
 | AC6 | R10 | logged in | sends "   " or 1,200 characters | rejected before reaching the LLM |
 | AC7 | R13 | DRV007 (SHP1007 and SHP1016, both in transit) | "I will be late by 45 minutes" | agent asks which shipment |
 | AC8 | R13 | DRV013 (SHP1013, planned 10:00) | "I am late by one hour" | agent asks to confirm arrival at about 11:00 |
-| AC9 | R15, S2, S6, ordering | DRV006, SHP1006 chosen | "reaching 11:20, any slot after 12?" | offered, in order: D2 12:00, D4 12:00, D1 13:00, D2 13:00, D3 13:00 — all standard docks |
+| AC9 | R15, S2, S6, ordering | DRV006, SHP1006 chosen | "reaching 11:20, any slot after 12?" | shown, in order: D2 12:00, D4 12:00, D1 13:00, D2 13:00, D3 13:00 — all standard docks |
 | AC10 | S3, A7 | SHP1014 (21,000 kg, 75-min unload) | asks for slots | only D2 / D4 slots; none on D1 or D3 (20,000 kg max) |
-| AC11 | S2, S4, R18 | SHP1015 (reefer), clock 16:25 | ETA 18:30 | no slots offered; agent says none available; ETA 18:30 is recorded |
-| AC12 | R13, R16-R17, R21 | DRV006 logged in | delay report → agent asks which shipment → "the Jaipur one" → "reaching 11:20" → slots offered → "I'll take the 12 o'clock one on D2" | slot SLOT-JAI-019 booked; old appointment APT1006 released and kept in history; confirmation names dock D2 and 12:00 |
-| AC12a | R21a | SHP1006 holds a 12:00 D2 booking | driver picks 12:00 D2 again | no change; agent says it is already their slot |
-| AC13 | R22 | 10 bookings for the same slot at the same instant | — | exactly 1 succeeds, 9 told "slot taken" |
-| AC14 | R24 | DRV006 logged in | tries to book for SHP1014 | refused |
-| AC14a | R24 | DRV004 logged in | tries to book for SHP1004 (waiting in yard) | refused |
+| AC11 | S2, S4, R18 | SHP1015 (reefer), clock 16:25 | ETA 18:30 | no slots shown; agent says none available and gives the coordinator's number |
+| AC12 | R13, R15-R17 | DRV006 logged in | delay report → agent asks which shipment → "the Jaipur one" → "reaching 11:20" → slots shown → "I'll take the 12 o'clock one on D2" | agent repeats "D2 at 12:00", gives +91-141-5001101 to confirm, and does not say it is booked |
+| AC14 | R24 | DRV006 logged in | slots requested for SHP1014 (not theirs) | refused |
+| AC14a | R24 | DRV004 logged in | slots requested for SHP1004 (waiting in yard) | refused |
 | AC15 | R19 | logged in | "write me a poem" | short polite refusal, no tool calls |
-| AC16 | R20a | DRV008 (all shipments cancelled) | "what time is my slot?" | agent says SHP1019 is cancelled and to contact dispatch; no slots offered |
+| AC16 | R20a | DRV008 (all shipments cancelled) | "what time is my slot?" | agent says SHP1019 is cancelled and to contact dispatch; no slots shown |
 | AC17 | R13 | DRV006, SHP1006, clock 09:40 | "reaching 9:00" | agent asks for the arrival time again |
-| AC18 | S5, Q2 | DRV001, SHP1017 (current slot D1 12:00) | "reaching 11:30" | offered, in order: D1 12:00 marked "your current slot", D2 12:00, D4 12:00, D1 13:00, D2 13:00 |
-| AC19 | R13 | DRV006 | "the Jaipur one, reaching 11:20" as the first message | no follow-up question; slots offered straight away |
+| AC18 | S5, Q2 | DRV001, SHP1017 (current slot D1 12:00) | "reaching 11:30" | shown, in order: D1 12:00 marked "your current slot", D2 12:00, D4 12:00, D1 13:00, D2 13:00 |
+| AC19 | R13 | DRV006 | "the Jaipur one, reaching 11:20" as the first message | no follow-up question; slots shown straight away |
 | AC20 | R13a | DRV013 | answers "not sure" twice to the arrival-time question | agent stops asking and gives the Jaipur warehouse coordinator's number |
+| AC21 | R26 | fresh seed data | the full AC12 conversation | shipments, appointments, appointment slots and ETA updates are identical to the seed |
+
+*AC12a and AC13 (re-picking your own slot, simultaneous bookings): moved to spec 002.*
 
 ## 8. Edge cases
 
-- The driver changes their mind after seeing the slots ("actually make it 1 pm") → offer slots again; book nothing until they choose.
-- The driver picks a slot that was not offered → treated as a request; booking still validates it (R23).
-- The driver sends the same message twice → no double booking (R22 covers bookings; a duplicate chat message is just stored twice).
-- The LLM service is down or times out → the driver sees "Sorry, I can't respond right now, please try again"; nothing is booked.
+- The driver changes their mind after seeing the slots ("actually make it 1 pm") → show slots again.
+- The driver picks a slot that was not shown → the agent checks it with the slot logic; if it is not
+  valid, the agent says so and shows the valid ones.
+- The driver says "book it" → the agent explains it cannot book yet and gives the coordinator's number.
+- The driver sends the same message twice → the duplicate chat message is just stored twice.
+- The LLM service is down or times out → the driver sees "Sorry, I can't respond right now, please try again".
 - The shipment is cancelled (SHP1019) → covered by R20a / AC16.
-- The shipment has no current appointment (e.g. SHP1012, SHP1016, SHP1018) → booking simply creates one; nothing to release.
 - The driver's shipment is already in the yard or at a dock (e.g. SHP1004, SHP1002) → not reschedulable; agent tells them to speak to the gate / dispatch.
 
 ## 9. Out of scope (later specs)
 
+- **Booking from the chat, double-booking protection, recording new ETAs → spec 002**
 - Warehouse confirmation and the ops console
 - Priority between shipments (critical vs low)
 - Dock breakdown and maintenance *events* (beyond the blocked slots already in the data), unloading overruns, after-21:00 approval
-- Unloads longer than a slot (offered anyway in this MVP, see A7)
+- Unloads longer than a slot (shown anyway in this MVP, see A7)
 - Rescheduling trucks already in the yard or at a dock
 - Real WhatsApp integration, passwords/OTP, multiple languages
 - Deploying anywhere other than a laptop
@@ -216,34 +216,39 @@ fresh copy of the seed data.
 ## 10. Decisions (formerly open questions)
 
 - **Q1.** Can a user unlink or relink their email? **No** — see R4b.
-- **Q2.** Should the agent offer the driver's current slot if it is still valid? **Yes**, marked
+- **Q2.** Should the agent show the driver's current slot if it is still valid? **Yes**, marked
   "your current slot" — see S5 and AC18.
 - **Q3.** How many follow-up questions? **As few as possible, each easy to answer** — only shipment
   and arrival time are ever asked, answers are suggested, and after two unclear answers to the same
-  question the agent hands over to dispatch — see R13, R13a, AC19, AC20.
+  question the agent hands over to the coordinator — see R13, R13a, AC19, AC20.
+- **Q4.** Book slots in the MVP? **No** — show them only; booking is spec 002. New ETAs are not
+  recorded either, so the app never changes operational data (R26).
 
 ## 11. Definition of done
 
-- Every acceptance criterion has a passing automated test, except AC7, AC8, AC15, AC16, AC17, AC19 and AC20, which
-  need the real LLM and are checked manually and listed in the README. (Their deterministic parts —
-  e.g. AC16's "no active shipment" lookup — still get automated tests.)
-- A new person can clone the repo, add an OpenAI key, run two commands and complete the AC12 flow in
-  the browser.
+- Every acceptance criterion has a passing automated test, except AC7, AC8, AC15, AC16, AC17, AC19 and
+  AC20, which need the real LLM and are checked manually and listed in the README. (Their
+  deterministic parts — e.g. AC16's "no active shipment" lookup — still get automated tests.)
+- A new person can clone the repo, add an OpenRouter API key, run two commands and complete the AC12
+  flow in the browser.
 
-## 12. Changes from v1 (review against seed data)
+## 12. Change log
 
+### v4 — scope cut to showing slots
+- Goal ends at "see valid slots → pick one → get the coordinator's number"; nothing is booked.
+- R16, R17, R18 reworded for showing instead of booking; R24 now limits who can *see* slots;
+  new R26 (no operational writes) and AC21.
+- Moved to spec 002: A2 (auto-approval), R21–R23, R25, AC12a, AC13, and the booking edge cases.
+- AC11 no longer records the ETA; AC12 ends with the coordinator's number instead of a booking.
+
+### v2–v3 — review against seed data
 - Defined *reschedulable / active shipment* and *baseline ETA* (§5).
-- DRV006 also has SHP1021 (Gurugram), so AC9 and AC12 now include the "which shipment?" turn.
+- DRV006 also has SHP1021 (Gurugram), so AC9 and AC12 include the "which shipment?" turn.
 - AC7 moved from DRV004 to DRV007: under the new definition DRV004 has only one active shipment
   (SHP1004 is already in the yard).
 - Added R20a / AC16 so the cancelled-shipment case (DRV008 / SHP1019) still works.
-- Added A7: 75-min unloads (SHP1014, SHP1009, SHP1005) in 60-min slots are offered anyway; AC10 now has a defined result.
+- Added A7: 75-min unloads (SHP1014, SHP1009, SHP1005) in 60-min slots are shown anyway.
 - Added tie-break by dock code; AC9 lists the exact expected slots.
-- Added R21a (re-picking own slot), past-ETA re-ask (R13 / AC17), phone normalisation (R4),
-  one-email-per-driver (R4a), and ETA recording timing (R25).
-- Noted that pending-confirmation appointments are released on rebooking (A2) and that slot status
-  already reflects dock events (A6).
-- Resolved Q1–Q3: permanent email link (R4b); current slot offered and marked (S5, AC18); minimal,
-  easy-to-answer follow-ups with a dispatch hand-off (R13, R13a, AC19, AC20). The "finish by"
-  question is no longer asked.
-- Status: Approved — ready for `plan.md`.
+- Added past-ETA re-ask (R13 / AC17), phone normalisation (R4), one-email-per-driver (R4a).
+- Resolved Q1–Q3: permanent email link (R4b); current slot shown and marked (S5, AC18); minimal,
+  easy-to-answer follow-ups with a coordinator hand-off (R13, R13a, AC19, AC20).
