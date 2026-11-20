@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | In progress — Phases 1–3 done |
+| Status | In progress — Phases 1–4 done |
 | Implements | [`plan.md`](plan.md) → [`spec.md`](spec.md) |
 
 > Small steps, in order. Each task says what to build, where, and how we know it is done.
@@ -78,22 +78,22 @@
 
 ## Phase 4 — Agent (plan §7)
 
-- [ ] **T4.1 Model setup.** Pick a small OpenRouter model that lists `tools` support and pin it in
+- [x] **T4.1 Model setup.** Pick a small OpenRouter model that lists `tools` support and pin it in
   `.env.example`; build the chat model (`ChatOpenAI` with `base_url=LLM_BASE_URL`) with 30 s timeout
   and 1 retry. Allow injecting a fake model for tests.
   *Done when:* one real tool-calling round trip through OpenRouter works from a small script.
-- [ ] **T4.2 Prompt.** `agent/prompt.py`: build the system prompt from fresh data (§7.2): clock,
+- [x] **T4.2 Prompt.** `agent/prompt.py`: build the system prompt from fresh data (§7.2): clock,
   driver's first name, shipments, coordinator phone, behaviour rules.
   *Done when:* a snapshot test for DRV007 and DRV008 shows the expected facts and no shipment the
   driver doesn't own.
-- [ ] **T4.3 Tools.** `agent/tools.py`: `resolve_arrival`, `find_slots`, `check_pick` (§7.3),
+- [x] **T4.3 Tools.** `agent/tools.py`: `resolve_arrival`, `find_slots`, `check_pick` (§7.3),
   driver ID read from run config only.
   *Done when:* calling each tool with another driver's shipment returns "not yours"; tool
   signatures shown to the model have no driver ID parameter.
-- [ ] **T4.4 Graph and `run_turn()`.** `agent/graph.py`: agent ⇄ tools loop, SQLite checkpointer
+- [x] **T4.4 Graph and `run_turn()`.** `agent/graph.py`: agent ⇄ tools loop, SQLite checkpointer
   keyed by thread ID, failure handling (§7.4).
   *Done when:* a fake model that raises → reply is the "Sorry…" text, stored as the agent message.
-- [ ] **T4.5 End-to-end agent test.** `tests/test_agent_flow.py`: scripted fake model plays the AC12
+- [x] **T4.5 End-to-end agent test.** `tests/test_agent_flow.py`: scripted fake model plays the AC12
   conversation (which shipment → 11:20 → slots → D2 12:00).
   *Done when:* the final reply names D2, 12:00 and +91-141-5001101; shipments, appointments,
   appointment slots and ETA updates are identical before and after (AC21).

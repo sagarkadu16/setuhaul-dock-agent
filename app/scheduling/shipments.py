@@ -169,6 +169,15 @@ def get_own_shipment(conn: sqlite3.Connection, driver_id: str, shipment_id: str)
 _CLOCK_TIME = re.compile(r"^\s*([01]?\d|2[0-3]):([0-5]\d)\s*$")
 
 
+def today_at(hhmm: str, now: datetime | None = None) -> datetime:
+    """24-hour "HH:MM" as a time on the scheduling day (spec A3)."""
+    now = now or clock.now()
+    match = _CLOCK_TIME.match(hhmm or "")
+    if not match:
+        raise BadArrivalInput(f"Times must be 24-hour HH:MM, got {hhmm!r}.")
+    return datetime.combine(now.date(), time(int(match.group(1)), int(match.group(2))), tzinfo=now.tzinfo)
+
+
 def resolve_arrival(
     shipment: Shipment,
     *,
@@ -187,12 +196,7 @@ def resolve_arrival(
     now = now or clock.now()
 
     if clock_time is not None:
-        match = _CLOCK_TIME.match(clock_time)
-        if not match:
-            raise BadArrivalInput(f"clock_time must be 24-hour HH:MM, got {clock_time!r}.")
-        arrival = datetime.combine(
-            now.date(), time(int(match.group(1)), int(match.group(2))), tzinfo=now.tzinfo
-        )
+        arrival = today_at(clock_time, now)
     else:
         if not 0 < delay_minutes <= 24 * 60:
             raise BadArrivalInput("delay_minutes must be between 1 and 1440.")

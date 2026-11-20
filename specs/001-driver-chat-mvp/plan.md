@@ -297,7 +297,7 @@ Errors show as a one-line message under the input box.
 1. Skeleton: `pyproject.toml`, `Makefile`, `.env.example`, config + clock, database build. ✅
 2. Scheduling layer, read-only, + its tests (§6). ✅
 3. Identity, conversations, input cleaning + tests (§5). ✅
-4. Agent graph, prompt, tools, fake-model test (§7).
+4. Agent graph, prompt, tools, fake-model test (§7). ✅
 5. Web API + page (§8); walk through AC12 in the browser.
 6. Manual LLM checks; README (setup, demo script, manual AC list).
 
@@ -321,4 +321,4 @@ Errors show as a one-line message under the input box.
 - **D4. ✅** LLM provider is OpenRouter through its OpenAI-compatible API (`LLM_BASE_URL`).
 - **D5. ✅** Show slots only; scheduling is read-only; booking design kept for spec 002 (plan v1 in
   git history, commit `062fc38`).
-- **Still open:** the exact model name, pinned in `.env.example` when task T4.1 is done.
+- **D6. ✅** Model: `openai/gpt-4.1-mini` via OpenRouter (owner's choice; tool calling checked in T4.1).
