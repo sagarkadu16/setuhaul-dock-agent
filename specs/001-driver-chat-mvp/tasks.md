@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Built — awaiting owner browser test (T5.3) and fresh-clone check (T6.3) |
+| Status | Built — awaiting owner browser test (T5.3) |
 | Implements | [`plan.md`](plan.md) → [`spec.md`](spec.md) |
 
 > Small steps, in order. Each task says what to build, where, and how we know it is done.
@@ -119,7 +119,7 @@
 - [x] **T6.2 README.** Setup (clone, copy `.env.example` → `.env`, add key, `make setup`,
   `make run`), demo script for AC12, manual check table, how to reset the data, known limits
   (spec §9).
-- [ ] **T6.3 Definition of done.** Fresh clone in a new folder, follow only the README, complete
+- [x] **T6.3 Definition of done.** *(Fresh clone: setup, 133 tests, server start and no-key message checked; AC12 with the real model checked on the main checkout.)* Fresh clone in a new folder, follow only the README, complete
   AC12. `make test` is green.
 
 ---
