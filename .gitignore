@@ -221,3 +221,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# SetuHaul runtime databases (seed DB in data/seed/ stays tracked)
+data/app.db*
+data/checkpoints.db*
