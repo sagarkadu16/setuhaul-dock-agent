@@ -32,6 +32,7 @@ def connect(path: Path | None = None, *, read_only: bool = False) -> sqlite3.Con
         uri=True,
         autocommit=True,
         timeout=BUSY_TIMEOUT_MS / 1000,
+        check_same_thread=False
     )
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")

@@ -9,7 +9,7 @@ Rules for this module:
 import sqlite3
 from datetime import datetime
 
-from setuhaul.models.domain import Appointment, Driver, EtaEstimate, Shipment, SlotView, SlotRequestRecord, RequestStatus
+from setuhaul.models.domain import Appointment, Driver, EtaEstimate, Shipment, SlotView, SlotRequestRecord, RequestStatus, ChatMessage
 
 # Shipment statuses that can still need a dock.
 _OPEN_SHIPMENT_STATUSES = ("PLANNED", "ASSIGNED", "IN_TRANSIT", "AT_GATE", "WAITING")
@@ -121,3 +121,52 @@ def due_pending_requests(
         (slot_id, wall_now.isoformat()),
     ).fetchall()
     return [SlotRequestRecord.model_validate(dict(r)) for r in rows]
+
+
+def driver_for_email(conn: sqlite3.Connection, email: str) -> Driver | None:
+    row = conn.execute(
+        "SELECT d.* FROM app_users u JOIN drivers d ON d.driver_id = u.driver_id "
+        "WHERE u.email = ?",
+        (email.strip(),),
+    ).fetchone()
+    return Driver.model_validate(dict(row)) if row else None
+
+
+def thread_owner(conn: sqlite3.Connection, thread_id: str) -> str | None:
+    """driver_id that owns this thread, or None if no such thread."""
+    row = conn.execute(
+        "SELECT driver_id FROM chat_threads WHERE thread_id = ?", (thread_id,)
+    ).fetchone()
+    return row["driver_id"] if row else None
+
+
+def messages_for_thread(
+    conn: sqlite3.Connection, thread_id: str, limit: int = 50
+) -> list[ChatMessage]:
+    """The last `limit` messages, oldest first (chat display order)."""
+    rows = conn.execute(
+        "SELECT * FROM ("
+        "  SELECT rowid AS _pos, * FROM chat_messages WHERE thread_id = ? "
+        "  ORDER BY rowid DESC LIMIT ?"
+        ") ORDER BY _pos",
+        (thread_id, limit),
+    ).fetchall()
+    return [ChatMessage.model_validate(dict(r)) for r in rows]
+
+def latest_request_for_shipment(
+    conn: sqlite3.Connection, shipment_id: str
+) -> SlotRequestRecord | None:
+    row = conn.execute(
+        "SELECT * FROM slot_requests WHERE shipment_id = ? ORDER BY request_seq DESC LIMIT 1",
+        (shipment_id,),
+    ).fetchone()
+    return SlotRequestRecord.model_validate(dict(row)) if row else None
+
+
+def last_agent_message(conn: sqlite3.Connection, thread_id: str) -> str | None:
+    row = conn.execute(
+        "SELECT message_text FROM chat_messages WHERE thread_id = ? AND sender_type = 'AGENT' "
+        "ORDER BY rowid DESC LIMIT 1",
+        (thread_id,),
+    ).fetchone()
+    return row["message_text"] if row else None

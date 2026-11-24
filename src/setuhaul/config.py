@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     @classmethod
     def _anchor_to_project_root(cls, path: Path) -> Path:
         return path if path.is_absolute() else PROJECT_ROOT / path
+    
+    @field_validator("session_secret")
+    @classmethod
+    def _secret_long_enough(cls, value: SecretStr) -> SecretStr:
+        if len(value.get_secret_value()) < 32:
+            raise ValueError("SESSION_SECRET must be at least 32 characters")
+        return value
+
 
     # LLM
     llm_api_key: SecretStr

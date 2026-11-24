@@ -32,3 +32,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_pending_request_per_shipment
 -- Fast lookup of "pending requests for this slot".
 CREATE INDEX IF NOT EXISTS ix_slot_requests_slot_status
     ON slot_requests(slot_id, status);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_chat_message_external_id
+    ON chat_messages(thread_id, external_message_id)
+    WHERE external_message_id IS NOT NULL;

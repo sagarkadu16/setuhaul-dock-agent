@@ -154,3 +154,12 @@ class SlotRequestRecord(_Row):
     offered_slot_id: str | None = None
     decision_note: str | None = None
     decided_at: AwareDatetime | None = None
+
+
+class ChatMessage(_Row):
+    chat_message_id: str
+    thread_id: str
+    sender_type: str
+    message_text: str
+    message_ts: AwareDatetime
+    requires_human_review: bool
