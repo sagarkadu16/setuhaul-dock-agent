@@ -15,6 +15,7 @@ from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field
 
 from setuhaul.config import PROJECT_ROOT, get_settings
 from setuhaul.db.connection import open_db
+from uuid import UUID
 
 SCENARIOS_DIR = PROJECT_ROOT / "scenarios"
 APP_SCHEMA = Path(__file__).with_name("app_schema.sql")
@@ -50,6 +51,7 @@ class ScenarioSetup(_Strict):
 class ScenarioUser(_Strict):
     email: Email
     driver_phone: str
+    cognito_sub: UUID | None = None
 
 
 class Scenario(_Strict):
@@ -171,8 +173,9 @@ def _create_users(conn: sqlite3.Connection, scenario: Scenario) -> None:
         if driver["driver_status"] != "ACTIVE":
             raise ScenarioError(f"users: driver {driver['driver_id']} is {driver['driver_status']}")
         conn.execute(
-            "INSERT INTO app_users (email, driver_id, created_at) VALUES (?, ?, ?)",
-            (user.email, driver["driver_id"], created_at),
+            "INSERT INTO app_users (email, driver_id, cognito_sub, created_at) VALUES (?, ?, ?, ?)",
+            (user.email, driver["driver_id"],
+             str(user.cognito_sub) if user.cognito_sub else None, created_at),
         )
 
 

@@ -2,9 +2,10 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import AwareDatetime, SecretStr, field_validator, PositiveInt
+from pydantic import AwareDatetime, SecretStr, field_validator, model_validator, PositiveInt
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         frozen=True,
+        hide_input_in_errors=True,
     )
 
     @field_validator("seed_db_path", "app_db_path", "checkpoint_db_path")
@@ -39,8 +41,41 @@ class Settings(BaseSettings):
     app_clock: AwareDatetime
     decision_window_seconds: PositiveInt = 10
 
-    # Auth
-    session_secret: SecretStr
+    # Abuse limits: each /chat message is an LLM call (costs money)
+    chat_rate_limit: PositiveInt = 10           # messages per driver...
+    chat_rate_window_seconds: PositiveInt = 60  # ...per this many seconds
+
+        # Auth
+    auth_mode: Literal["local", "cognito"] = "local"
+    session_secret: SecretStr            # signs Level 1 tokens (AUTH_MODE=local)
+    cognito_region: str = ""
+    cognito_user_pool_id: str = ""
+    cognito_client_id: str = ""
+
+    @property
+    def cognito_issuer(self) -> str:
+        return f"https://cognito-idp.{self.cognito_region}.amazonaws.com/{self.cognito_user_pool_id}"
+
+    @property
+    def cognito_jwks_url(self) -> str:
+        return f"{self.cognito_issuer}/.well-known/jwks.json"
+
+    @model_validator(mode="after")
+    def _cognito_settings_present(self) -> "Settings":
+        """In cognito mode, refuse to start unless the pool and client are configured."""
+        if self.auth_mode != "cognito":
+            return self
+        required = {
+            "COGNITO_REGION": self.cognito_region,
+            "COGNITO_USER_POOL_ID": self.cognito_user_pool_id,
+            "COGNITO_CLIENT_ID": self.cognito_client_id,
+        }
+        missing = [name for name, value in required.items() if not value.strip()]
+        if missing:
+            raise ValueError(f"AUTH_MODE=cognito needs: {', '.join(missing)}")
+        if not self.cognito_user_pool_id.startswith(self.cognito_region + "_"):
+            raise ValueError("COGNITO_USER_POOL_ID must start with COGNITO_REGION + '_'")
+        return self
 
     # Storage
     seed_db_path: Path = PROJECT_ROOT / "data/seed/setuhaul_freight_operations.db"

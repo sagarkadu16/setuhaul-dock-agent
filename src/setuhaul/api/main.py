@@ -2,13 +2,14 @@ import sqlite3
 
 from fastapi import FastAPI, HTTPException, status, Query
 
-from setuhaul.api.deps import Conn, DriverId
-from setuhaul.api.schemas import LoginIn, LoginOut, ChatIn, ChatOut, HistoryOut, MessageOut
+from setuhaul.api.deps import ChatDriverId, Conn, DriverId
+from setuhaul.api.schemas import LoginIn, LoginOut, ChatIn, ChatOut, HistoryOut, MessageOut, ThreadOut, AuthConfigOut
 from setuhaul.clock import SystemClock, get_clock
 from setuhaul.services import chat
-from setuhaul.services.identity import LoginFailed, login
+from setuhaul.services.identity import LoginFailed, login, InvalidSession, driver_for_session
 from setuhaul.services.sanitize import InvalidMessage
 from setuhaul.agent.runner import run_turn
+from setuhaul.config import get_settings
 
 
 app = FastAPI(title="SetuHaul Dock Agent", version="0.1.0")
@@ -22,6 +23,8 @@ def health() -> dict[str, str]:
 
 @app.post("/login")
 def login_route(body: LoginIn, conn: sqlite3.Connection = Conn) -> LoginOut:
+    if get_settings().auth_mode != "local":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")
     try:
         driver, token = login(conn, body.email)
     except LoginFailed as e:
@@ -32,7 +35,7 @@ def login_route(body: LoginIn, conn: sqlite3.Connection = Conn) -> LoginOut:
 
 @app.post("/chat")
 def chat_route(
-    body: ChatIn, driver_id: str = DriverId, conn: sqlite3.Connection = Conn
+    body: ChatIn, driver_id: str = ChatDriverId, conn: sqlite3.Connection = Conn
 ) -> ChatOut:
     try:
         reply = run_turn(
@@ -64,3 +67,22 @@ def history_route(
             for m in msgs
         ],
     )
+
+
+@app.post("/threads", status_code=status.HTTP_201_CREATED)
+def start_thread_route(driver_id: str = DriverId, conn: sqlite3.Connection = Conn) -> ThreadOut:
+    """Open a new chat for the logged-in driver (works in both AUTH_MODEs)."""
+    try:
+        driver = driver_for_session(conn, driver_id)
+    except InvalidSession as e:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(e)) from e
+    thread_id = chat.start_thread(conn, driver.driver_id, wall_clock.now())
+    return ThreadOut(thread_id=thread_id, driver_name=driver.driver_name)
+
+@app.get("/auth/config")
+def auth_config() -> AuthConfigOut:
+    """Unauthenticated: the UI calls this before anyone has logged in."""
+    s = get_settings()
+    if s.auth_mode == "cognito":
+        return AuthConfigOut(mode="cognito", region=s.cognito_region, client_id=s.cognito_client_id)
+    return AuthConfigOut(mode="local")

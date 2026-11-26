@@ -12,6 +12,11 @@ FastAPI backend · GPT-4o tool-calling agent · Pydantic models · scenario load
 race-safe booking (BEGIN IMMEDIATE + unique index) · Streamlit chat UI · tests.
 Out of scope: ops console, warehouse approval, breakdowns, after-21:00 rule, deployment.
 
+## Level 2 (in progress)
+Cognito passwordless auth and the path to deployment. Scope, decisions, steps and a
+log of every Level 2 change: docs/level-2.md. Level 1 behaviour must keep working
+under AUTH_MODE=local. Mark Level 2 commits `feat(l2):` / `fix(l2):`.
+
 ## Architecture rules
 - The LLM talks and calls tools. Python decides slots, priority and bookings.
 - Driver identity comes from the session, never from LLM output.

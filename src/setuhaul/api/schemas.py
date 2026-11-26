@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
+from typing import Literal
 
 
 class _In(BaseModel):
@@ -16,6 +17,16 @@ class LoginOut(BaseModel):
     token: str
     thread_id: str
     driver_name: str
+
+class ThreadOut(BaseModel):
+    thread_id: str
+    driver_name: str
+
+class AuthConfigOut(BaseModel):
+    """What the UI needs to show the right login. Public values only, never secrets."""
+    mode: Literal["local", "cognito"]
+    region: str | None = None
+    client_id: str | None = None
 
 
 class ChatIn(_In):
@@ -37,3 +48,4 @@ class MessageOut(BaseModel):
 class HistoryOut(BaseModel):
     thread_id: str
     messages: list[MessageOut]
+

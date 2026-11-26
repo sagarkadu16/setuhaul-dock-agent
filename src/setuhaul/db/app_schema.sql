@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS app_users (
     email       TEXT PRIMARY KEY COLLATE NOCASE,
     driver_id   TEXT NOT NULL UNIQUE REFERENCES drivers(driver_id),
+    cognito_sub TEXT UNIQUE,
     created_at  TEXT NOT NULL
 );
 

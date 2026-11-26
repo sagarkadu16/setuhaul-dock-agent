@@ -225,3 +225,6 @@ __marimo__/
 # SetuHaul runtime databases (seed DB in data/seed/ stays tracked)
 data/app.db*
 data/checkpoints.db*
+
+# CDK
+infra/cdk.out/

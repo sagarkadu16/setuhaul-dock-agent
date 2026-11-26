@@ -45,3 +45,10 @@ def read_token(token: str) -> str:
     except BadSignature as exc:
         raise InvalidSession("Invalid session") from exc
     return data["driver_id"]
+
+def driver_for_session(conn: sqlite3.Connection, driver_id: str) -> Driver:
+    """The Driver behind an already-verified session. Raises InvalidSession if it's gone."""
+    driver = queries.get_driver(conn, driver_id)
+    if driver is None:
+        raise InvalidSession("Invalid session")
+    return driver

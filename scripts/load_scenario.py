@@ -26,7 +26,7 @@ def main() -> int:
     scenario = read_scenario(args.scenario)
     with open_db(db_path, read_only=True) as db:
         users = db.execute(
-            "SELECT u.email, d.driver_id, d.driver_name FROM app_users u "
+            "SELECT u.email, u.cognito_sub, d.driver_id, d.driver_name FROM app_users u "
             "JOIN drivers d USING (driver_id) ORDER BY u.email"
         ).fetchall()
         blocked = db.execute(
@@ -39,7 +39,7 @@ def main() -> int:
     for row in blocked:
         print(f"  blocked: {row['slot_id']} ({row['block_reason']})")
     for row in users:
-        print(f"  user: {row['email']} -> {row['driver_id']} {row['driver_name']}")
+        print(f"  user: {row['email']} -> {row['driver_id']} {row['driver_name']} (cognito_sub={row['cognito_sub']})")
     return 0
 
 

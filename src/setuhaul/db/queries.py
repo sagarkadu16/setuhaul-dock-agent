@@ -132,6 +132,16 @@ def driver_for_email(conn: sqlite3.Connection, email: str) -> Driver | None:
     return Driver.model_validate(dict(row)) if row else None
 
 
+def driver_for_cognito_sub(conn: sqlite3.Connection, sub: str) -> Driver | None:
+    """Driver linked to this Cognito user (Level 2), or None if not linked."""
+    row = conn.execute(
+        "SELECT d.* FROM app_users u JOIN drivers d ON d.driver_id = u.driver_id "
+        "WHERE u.cognito_sub = ?",
+        (sub,),
+    ).fetchone()
+    return Driver.model_validate(dict(row)) if row else None
+
+
 def thread_owner(conn: sqlite3.Connection, thread_id: str) -> str | None:
     """driver_id that owns this thread, or None if no such thread."""
     row = conn.execute(
