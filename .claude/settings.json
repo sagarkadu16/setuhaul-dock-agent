@@ -1,6 +1,6 @@
 {
     "outputStyle": "Learning",
     "permissions": {
-      "deny": ["Edit", "Write", "NotebookEdit"]
+      "deny": ["NotebookEdit"]
     }
 }

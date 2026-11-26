@@ -3,7 +3,6 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import AwareDatetime, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import AwareDatetime, SecretStr, field_validator, PositiveInt
 

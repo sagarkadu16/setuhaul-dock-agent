@@ -62,7 +62,7 @@ def chat_view() -> None:
     for m in st.session_state.messages:
         is_driver = m["sender"] == "DRIVER"
         with st.chat_message("user" if is_driver else "assistant"):
-            if is_driver:
+            if is_driver:   
                 st.text(m["text"])
             else:
                 st.markdown(m["text"])

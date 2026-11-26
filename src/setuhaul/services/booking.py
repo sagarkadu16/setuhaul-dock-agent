@@ -30,50 +30,6 @@ class SlotNotAvailable(BookingError):
         super().__init__(f"{slot_id} can't be booked: {'; '.join(reasons)}")
 
 
-def book_slot(
-    conn: sqlite3.Connection,
-    driver_id: str,
-    shipment_id: str,
-    slot_id: str,
-    now: datetime,
-) -> Appointment:
-    try:
-        with immediate_transaction(conn):
-            shipment = queries.get_shipment(conn, shipment_id)
-            if shipment is None or shipment.driver_id != driver_id:
-                raise NotYourShipment(f"Shipment {shipment_id} is not assigned to you")
-
-            current = queries.current_appointment(conn, shipment_id)
-            if current is not None and current.slot_id == slot_id:
-                return current  # already booked: a retry, not a new request
-
-            slot = queries.get_slot(conn, slot_id)
-            if slot is None:
-                raise SlotNotAvailable(slot_id, ("no such slot",))
-            eta = queries.latest_eta(conn, shipment_id)
-            earliest_start = max(eta.effective_eta_ts, now) if eta else now
-            verdict = check_slot(slot, shipment, earliest_start)
-            if not verdict.feasible:
-                raise SlotNotAvailable(slot_id, verdict.reasons)
-
-            if current is not None:
-                writes.retire_appointment(
-                    conn, current.appointment_id, now, f"Rebooked to {slot_id} via driver chat"
-                )
-            new_id = f"APT-{uuid.uuid4().hex[:10].upper()}"
-            writes.insert_appointment(
-                conn, new_id, shipment_id, slot_id, now,
-                replaces=current.appointment_id if current else None,
-            )
-    except sqlite3.IntegrityError as exc:
-        # Backstop: the unique index caught a double booking our re-check missed.
-        raise SlotNotAvailable(slot_id, ("just taken by another booking",)) from exc
-
-    booked = queries.current_appointment(conn, shipment_id)
-    assert booked is not None and booked.appointment_id == new_id
-    return booked
-
-
 def owned_shipment(conn: sqlite3.Connection, driver_id: str, shipment_id: str) -> Shipment:
     shipment = queries.get_shipment(conn, shipment_id)
     if shipment is None or shipment.driver_id != driver_id:
