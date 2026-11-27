@@ -228,3 +228,6 @@ data/checkpoints.db*
 
 # CDK
 infra/cdk.out/
+# Local databases (built by make setup / make reset-db)
+data/*.db
+data/*.db-*
