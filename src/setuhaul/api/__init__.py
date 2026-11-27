@@ -1,0 +1,1 @@
+"""HTTP layer: parse requests, call agent/services, map errors to status codes. No business logic."""

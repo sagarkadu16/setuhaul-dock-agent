@@ -1,0 +1,41 @@
+# Scenario: two late drivers want the same dock slot.
+#
+# Loaded by scripts/load_scenario.py:
+#   1. copy data/seed/setuhaul_freight_operations.db -> data/app.db
+#   2. apply `setup` changes below (typed operations, never raw SQL)
+#   3. create login `users`
+# The seed file itself is never modified.
+
+name: two_drivers_one_slot
+description: >
+  Jaipur DC at 09:40. SHP1006 (HIGH, ETA 11:20) and SHP1012 (NORMAL, ETA 11:10)
+  both need a standard dock. The first slot either can reach is 12:00, and the
+  scenario leaves exactly one 12:00 standard slot open. Priority decides who gets it;
+  the other driver is offered the next valid slot.
+
+# Business "now". Must equal APP_CLOCK in .env (the loader checks this).
+clock: "2026-08-04T09:40:00+05:30"
+facility_id: FAC-JAI-01
+
+setup:
+  block_slots:
+    - slot_id: SLOT-JAI-047          # D4 12:00-13:00
+      reason: "Scenario: D4 crew reassigned for 12:00 window"
+
+# Demo logins: email -> driver (matched by phone, the identity the seed already has).
+# .test is a reserved TLD, so these can never be real inboxes.
+users:
+  - email: manoj@setuhaul.test
+    driver_phone: "+91-9000010006"   # DRV006 Manoj Sharma, SHP1006
+    cognito_sub: 69fe94b8-50a1-7006-fba8-5a0cd3f5fd4e
+  - email: arjun@setuhaul.test
+    driver_phone: "+91-9000010012"   # DRV012 Arjun Das, SHP1012
+    cognito_sub: 49ee8468-80e1-704f-c0bd-4b08a1dcee2c
+
+# What the demo should show. Documentation for readers and later checks;
+# the loader does not act on it.
+expect:
+  contested_slot: SLOT-JAI-019       # D2 12:00-13:00
+  winner: SHP1006                    # HIGH beats NORMAL
+  runner_up: SHP1012
+  runner_up_offer: SLOT-JAI-006      # D1 13:00-14:00 (earliest start, then dock code)

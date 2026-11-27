@@ -222,6 +222,12 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# SetuHaul runtime databases (seed DB in data/seed/ stays tracked)
+data/app.db*
+data/checkpoints.db*
+
+# CDK
+infra/cdk.out/
 # Local databases (built by make setup / make reset-db)
 data/*.db
 data/*.db-*

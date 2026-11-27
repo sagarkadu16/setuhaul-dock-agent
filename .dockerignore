@@ -1,0 +1,15 @@
+# Never send secrets or local state into the build
+.env
+.env.*
+!.env.example
+.venv
+.git
+**/__pycache__
+.pytest_cache
+data/app.db*
+data/checkpoints.db*
+infra/cdk.out
+infra
+tests
+docs
+.claude
