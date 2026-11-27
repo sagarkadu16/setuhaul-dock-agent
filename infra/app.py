@@ -19,12 +19,9 @@ ses_from_email = os.environ.get("SES_FROM_EMAIL", "")   # verified SES sender; k
 if not ses_from_email:
     raise ValueError("Set SES_FROM_EMAIL to a verified SES identity in " + REGION)
 
-AuthStack(
-    app, f"SetuhaulAuth-{env_name}",
-    env_name=env_name,
-    ses_from_email=ses_from_email,
-    env=cdk.Environment(account=os.environ.get("CDK_DEFAULT_ACCOUNT"), region=REGION),
-)
+aws_env = cdk.Environment(account=os.environ.get("CDK_DEFAULT_ACCOUNT"), region=REGION)
+AuthStack(app, f"SetuhaulAuth-{env_name}", env_name=env_name, ses_from_email=ses_from_email, env=aws_env)
+HostingStack(app, f"SetuhaulHosting-{env_name}", env_name=env_name, env=aws_env)
 cdk.Tags.of(app).add("project", "setuhaul")
 cdk.Tags.of(app).add("env", env_name)
 app.synth()
