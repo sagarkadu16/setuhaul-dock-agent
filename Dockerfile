@@ -16,6 +16,7 @@
     
     # ---- runtime: no uv, no compilers, non-root ----
     FROM python:3.13-slim
+    RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
     RUN useradd --create-home --uid 10001 app
     WORKDIR /app
     COPY --from=build /app/.venv /app/.venv
