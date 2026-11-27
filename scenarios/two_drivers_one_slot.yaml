@@ -27,10 +27,10 @@ setup:
 users:
   - email: manoj@setuhaul.test
     driver_phone: "+91-9000010006"   # DRV006 Manoj Sharma, SHP1006
-    cognito_sub: 39fed408-50d1-70d2-4757-8061ba371968
+    cognito_sub: 69fe94b8-50a1-7006-fba8-5a0cd3f5fd4e
   - email: arjun@setuhaul.test
     driver_phone: "+91-9000010012"   # DRV012 Arjun Das, SHP1012
-    cognito_sub: 392ec498-50b1-7060-2970-3b51f9d9169d
+    cognito_sub: 49ee8468-80e1-704f-c0bd-4b08a1dcee2c
 
 # What the demo should show. Documentation for readers and later checks;
 # the loader does not act on it.

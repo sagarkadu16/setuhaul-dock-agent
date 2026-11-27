@@ -55,7 +55,7 @@ passwordless email OTP), keep the Level 1 demo working offline, and prepare for 
 | 10 | Streamlit OTP login (`InitiateAuth` → `RespondToAuthChallenge`). 10a `GET /auth/config` · 10b UI Cognito helper · 10c two-screen login | ✅ done |
 | 11 | Token expiry, refresh, logout (revoke). 11a refresh on 401 · 11b revoke on logout | ✅ done |
 | 12 | Hardening: 12a JWKS refetch cap · 12b rejection logging · 12c /chat rate limit · 12d console tightening (no SRP, 15-min tokens; PASSWORD factor can't be removed = accepted risk) · 12e threat protection + passkeys deferred (D5, D6) | ✅ done |
-| 13 | Infrastructure as code (CDK Python) with one pool each for dev, staging and prod. 13a app + stack + synth ✅ · 13b bootstrap + deploy dev · 13c switch .env to the CDK pool, retire the hand-made one | ⏳ in progress |
+| 13 | Infrastructure as code (CDK Python) with one pool each for dev, staging and prod. 13a app + stack + synth ✅ · 13b bootstrap + deploy dev ✅ · 13c drivers + .env moved to the CDK pool ✅ · 13d hand-made pool deleted ✅ | ✅ done |
 | 14 | Deployment: HTTPS, Secrets Manager, hosting, SQLite → Postgres | ⬜ |
 
 ## Change log (every Level 2 change)
@@ -88,19 +88,26 @@ passwordless email OTP), keep the Level 1 demo working offline, and prepare for 
 | 2026-11-27 | 12d | Console: app client flows now `ALLOW_REFRESH_TOKEN_AUTH` + `ALLOW_USER_AUTH` (removed `ALLOW_USER_SRP_AUTH`); access + ID tokens 60 → 15 min (refresh 5 days, revocation on, unchanged; verified via CLI). `PASSWORD` first factor can't be removed (console: "always available"). Probe: unknown email + `PREFERRED_CHALLENGE=EMAIL_OTP` now gets a fake `EMAIL_OTP` challenge, so the UI can't tell users apart. Remaining signal: raw `AvailableChallenges` (unknown = PASSWORD_SRP, PASSWORD, EMAIL_OTP; real = EMAIL_OTP). **Accepted risk**: users have no passwords; mitigate with WAF rate rules (Step 14). Note: an unprompted probe of a real user sends them an OTP email | AWS Cognito |
 | 2026-11-27 | 12e | Decision D5/D6: threat protection and passkeys deferred (see Decisions). Step 12 complete | this doc |
 | 2026-11-27 | 13a | CDK app (Python, aws-cdk-lib 2.278, `infra` uv dependency group so the API never ships CDK). `AuthStack(env_name)`: Essentials pool, admin-only, email alias, EMAIL_OTP (+ mandatory PASSWORD), MFA off, email-only recovery, SES sender from `SES_FROM_EMAIL` env (not in git); client USER_AUTH + refresh only, no secret, OAuth off, 15-min tokens, revocation on. Prod: deletion protection + RETAIN; dev/staging: DESTROY. Outputs = the 3 `COGNITO_*` values. 4 template tests (`uv run --group infra pytest infra/tests`). `cdk synth` OK; nothing deployed | `infra/`, `pyproject.toml`, `.gitignore` |
+| 2026-11-27 | 13b | `cdk bootstrap` (CDKToolkit stack) + `cdk deploy -c env=dev` → stack `SetuhaulAuth-dev`: pool `ap-southeast-2_blttsL7kE`, client `6t961s47emuuu7ptutt4jokhs6`. Live settings verified via CLI (Essentials, admin-only, EMAIL_OTP, USER_AUTH + refresh, 15-min access, revocation, no secret, OAuth off). SES identity policy allows `cognito-idp` without a SourceArn condition, so the new pool can send (tighten with `aws:SourceArn` at Step 14) | AWS CloudFormation, Cognito |
+| 2026-11-27 | 13c | Both drivers recreated in the CDK pool (admin-create, email_verified, invite suppressed → CONFIRMED). New subs: DRV006 `69fe94b8-…`, DRV012 `49ee8468-…`, updated in scenario YAML, `MANOJ_SUB` in tests, this doc, and `data/app.db` (UPDATE, no scenario reload). `.env` → new pool + client ids. Checks: 55 + 4 tests pass; API in cognito mode fetches the new pool's JWKS (2 keys) and rejects a forged token with 401; one real OTP for DRV006 via `CognitoLogin.start()`: SES CloudWatch shows Send=1, Delivery=1 | scenario YAML, tests, `.env`, `data/app.db` |
+| 2026-11-27 | 13d | Hand-made pool `ap-southeast-2_2ZaRmCWOi` deleted (deletion protection off → delete the console-created hosted-UI domain `ap-southeast-22zarmcwoi` → delete pool). Only `setuhaul-dev` (CDK) remains. Step 13 complete | AWS Cognito |
 
 ## Demo driver ↔ Cognito link (Level 2, dev pool)
-Real inboxes are kept out of git; see the Cognito console. Step 7 writes these into `app_users.cognito_sub`.
+Real inboxes are kept out of git; see the Cognito console. Step 7 writes these into `app_users.cognito_sub`. Since 13c these are the CDK pool's subs.
 
 | driver_id | Driver | Cognito `sub` |
 |-----------|--------|---------------|
-| DRV006 | Manoj Sharma | `39fed408-50d1-70d2-4757-8061ba371968` |
-| DRV012 | Arjun Das | `392ec498-50b1-7060-2970-3b51f9d9169d` |
+| DRV006 | Manoj Sharma | `69fe94b8-50a1-7006-fba8-5a0cd3f5fd4e` |
+| DRV012 | Arjun Das | `49ee8468-80e1-704f-c0bd-4b08a1dcee2c` |
 
 ## AWS resources created (for cost tracking and teardown)
 | Resource | Name / ID | Region | Created |
 |----------|-----------|--------|---------|
 | SES email identities | 2 verified Gmail inboxes (sender + driver logins) | ap-southeast-2 | Step 2 |
-| Cognito user pool | `ap-southeast-2_2ZaRmCWOi` ("User pool - larou1"), Essentials, deletion protection on | ap-southeast-2 | Step 3 |
+| Cognito user pool | `ap-southeast-2_2ZaRmCWOi` ("User pool - larou1"), Essentials, hand-made. **Deleted 2026-11-27 (13d)** | ap-southeast-2 | Step 3 |
 | Cognito users | 2 demo drivers (see table above) | ap-southeast-2 | Step 4 |
-| Cognito app client | `71086m73mar3bvpe630un61b34` (`setuhaul-front`), public, no secret | ap-southeast-2 | Step 3 |
+| Cognito app client | `71086m73mar3bvpe630un61b34` (`setuhaul-front`). **Deleted with the pool (13d)** | ap-southeast-2 | Step 3 |
+| CDK bootstrap | CloudFormation stack `CDKToolkit` (S3 assets bucket, ECR repo, deploy roles) | ap-southeast-2 | Step 13b |
+| Cognito user pool (CDK) | `ap-southeast-2_blttsL7kE` (`setuhaul-dev`), stack `SetuhaulAuth-dev`, RemovalPolicy DESTROY | ap-southeast-2 | Step 13b |
+| Cognito app client (CDK) | `6t961s47emuuu7ptutt4jokhs6` (`setuhaul-front-dev`) | ap-southeast-2 | Step 13b |
+| Cognito users (CDK pool) | 2 demo drivers (subs in the table above) | ap-southeast-2 | Step 13c |

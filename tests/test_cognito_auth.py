@@ -154,7 +154,7 @@ def test_rejection_reason_is_logged_but_token_is_not(cognito, caplog, token, rea
 
 # ---- API level: the whole path token -> sub -> driver through FastAPI ----
 
-MANOJ_SUB = "39fed408-50d1-70d2-4757-8061ba371968"   # linked to DRV006 in the scenario YAML
+MANOJ_SUB = "69fe94b8-50a1-7006-fba8-5a0cd3f5fd4e"   # linked to DRV006 in the scenario YAML
 
 
 @pytest.fixture
