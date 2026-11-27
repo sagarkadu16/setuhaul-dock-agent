@@ -21,6 +21,7 @@ from setuhaul.api.deps import chat_limiter
 from setuhaul.api.main import app
 from setuhaul.db.connection import open_db
 from setuhaul.db.scenario import load_scenario
+from setuhaul.logging_setup import setup_logging
 
 REGION = "ap-southeast-2"
 POOL = f"{REGION}_TESTPOOL"
@@ -235,3 +236,32 @@ def test_chat_is_rate_limited_per_driver(api, monkeypatch):
     assert r.status_code == 429
     assert 0 < int(r.headers["Retry-After"]) <= 60
     chat_limiter.cache_clear()                     # don't leak limit=2 into other tests
+
+
+
+
+@pytest.fixture
+def json_logs():
+    """Switch to JSON logs (into a buffer) for one test, then put pytest's logging back."""
+    root = logging.getLogger()
+    saved_handlers, saved_level = root.handlers[:], root.level
+    buffer = io.StringIO()
+    setup_logging(json_logs=True, stream=buffer)
+    yield buffer
+    root.handlers[:] = saved_handlers
+    root.setLevel(saved_level)
+
+
+def test_log_lines_are_json_and_carry_the_request_id(api, json_logs):
+    r = api.post("/threads", headers=bearer(sign(claims(), key=ATTACKER_KEY)))
+    lines = [json.loads(line) for line in json_logs.getvalue().splitlines()]
+    rejected = [entry for entry in lines if entry["msg"].startswith("Rejected access token")]
+    access = [entry for entry in lines if entry["msg"].startswith("POST /threads -> 401")]
+    assert rejected and access
+    assert rejected[0]["request_id"] == access[0]["request_id"] == r.headers["X-Request-ID"]
+
+
+def test_unsafe_incoming_request_id_is_replaced(api):
+    assert api.get("/health", headers={"X-Request-ID": "lb-abc-123"}).headers["X-Request-ID"] == "lb-abc-123"
+    replaced = api.get("/health", headers={"X-Request-ID": 'x" fake=1'}).headers["X-Request-ID"]
+    assert replaced != 'x" fake=1' and len(replaced) == 32

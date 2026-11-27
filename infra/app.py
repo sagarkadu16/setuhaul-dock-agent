@@ -5,6 +5,7 @@ import os
 import aws_cdk as cdk
 
 from auth_stack import AuthStack
+from hosting_stack import HostingStack
 
 ENVIRONMENTS = ("dev", "staging", "prod")
 REGION = "ap-southeast-2"        # the org SCP denies every other region

@@ -76,6 +76,18 @@ class Settings(BaseSettings):
         if not self.cognito_user_pool_id.startswith(self.cognito_region + "_"):
             raise ValueError("COGNITO_USER_POOL_ID must start with COGNITO_REGION + '_'")
         return self
+    
+    
+    # Deployment: dev (laptop), staging, prod
+    app_env: Literal["dev", "staging", "prod"] = "dev"
+
+    @model_validator(mode="after")
+    def _deployed_envs_use_cognito(self) -> "Settings":
+        """Staging/prod must never fall back to the Level 1 email-only login."""
+        if self.app_env != "dev" and self.auth_mode != "cognito":
+            raise ValueError(f"APP_ENV={self.app_env} requires AUTH_MODE=cognito")
+        return self
+
 
     # Storage
     seed_db_path: Path = PROJECT_ROOT / "data/seed/setuhaul_freight_operations.db"

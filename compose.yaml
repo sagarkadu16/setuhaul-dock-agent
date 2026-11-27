@@ -1,0 +1,36 @@
+# The whole app on one machine: your laptop now, the EC2 instance later (14f).
+name: setuhaul
+
+services:
+  api:
+    image: ${SETUHAUL_IMAGE:-setuhaul:dev}
+    env_file: .env
+    environment:                      # beats .env: the DBs must live on the volume
+      APP_DB_PATH: /data/app.db
+      CHECKPOINT_DB_PATH: /data/checkpoints.db
+    volumes:
+      - data:/data
+    restart: unless-stopped
+    # No "ports": the API is reachable only from the UI, over the compose network.
+
+  ui:
+    image: ${SETUHAUL_IMAGE:-setuhaul:dev}
+    command: ["streamlit", "run", "ui/app.py",
+              "--server.port", "8501", "--server.address", "0.0.0.0",
+              "--server.headless", "true", "--browser.gatherUsageStats", "false"]
+    environment:
+      SETUHAUL_API_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    healthcheck:                      # the image's check probes the API port; the UI needs its own
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      start_period: 15s
+    depends_on:
+      api:
+        condition: service_healthy    # don't serve a login page while the API is still starting
+    restart: unless-stopped
+
+volumes:
+  data:

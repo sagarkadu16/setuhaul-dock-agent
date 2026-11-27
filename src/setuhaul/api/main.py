@@ -1,6 +1,8 @@
 import sqlite3
+import logging
+import time
 
-from fastapi import FastAPI, HTTPException, status, Query
+from fastapi import FastAPI, HTTPException, status, Query, Request
 
 from setuhaul.api.deps import ChatDriverId, Conn, DriverId
 from setuhaul.api.schemas import LoginIn, LoginOut, ChatIn, ChatOut, HistoryOut, MessageOut, ThreadOut, AuthConfigOut
@@ -10,10 +12,37 @@ from setuhaul.services.identity import LoginFailed, login, InvalidSession, drive
 from setuhaul.services.sanitize import InvalidMessage
 from setuhaul.agent.runner import run_turn
 from setuhaul.config import get_settings
+from setuhaul.logging_setup import new_request_id, request_id_var, setup_logging
 
 
-app = FastAPI(title="SetuHaul Dock Agent", version="0.1.0")
+def api_docs_urls(app_env: str) -> dict:
+    """/docs lists every route and schema: handy on a laptop, a free map for attackers when deployed."""
+    if app_env == "dev":
+        return {}
+    return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+
+
+app = FastAPI(title="SetuHaul Dock Agent", version="0.1.0", **api_docs_urls(get_settings().app_env))
 wall_clock = SystemClock()
+
+setup_logging(json_logs=get_settings().app_env != "dev")
+log = logging.getLogger(__name__)
+
+
+@app.middleware("http")
+async def request_id_and_access_log(request: Request, call_next):
+    """Tag everything logged during this request with one id; log one line per request."""
+    rid = new_request_id(request.headers.get("x-request-id"))
+    token = request_id_var.set(rid)
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+        log.info("%s %s -> %s in %.0f ms", request.method, request.url.path,
+                 response.status_code, (time.perf_counter() - started) * 1000)
+    finally:
+        request_id_var.reset(token)
+    response.headers["X-Request-ID"] = rid
+    return response
 
 
 @app.get("/health")
