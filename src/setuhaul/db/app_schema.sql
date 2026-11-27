@@ -37,3 +37,19 @@ CREATE INDEX IF NOT EXISTS ix_slot_requests_slot_status
 CREATE UNIQUE INDEX IF NOT EXISTS ux_chat_message_external_id
     ON chat_messages(thread_id, external_message_id)
     WHERE external_message_id IS NOT NULL;
+
+-- Outbox: one message per decided slot request, written in the SAME transaction
+-- as the decision. Delivery channels (UI polling now, SMS later) read from here.
+-- AUTOINCREMENT: ids are never reused, so "after id N" is a safe polling cursor.
+CREATE TABLE IF NOT EXISTS notifications (
+    notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    driver_id       TEXT NOT NULL REFERENCES drivers(driver_id),
+    request_seq     INTEGER NOT NULL UNIQUE REFERENCES slot_requests(request_seq),
+    kind            TEXT NOT NULL CHECK (kind IN ('SLOT_CONFIRMED', 'SLOT_NOT_BOOKED')),
+    message_text    TEXT NOT NULL,
+    created_at      TEXT NOT NULL
+);
+
+-- "New notifications for this driver after id N", which is what the poller asks.
+CREATE INDEX IF NOT EXISTS ix_notifications_driver
+    ON notifications(driver_id, notification_id);

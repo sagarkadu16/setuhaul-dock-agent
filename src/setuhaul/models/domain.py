@@ -163,3 +163,20 @@ class ChatMessage(_Row):
     message_text: str
     message_ts: AwareDatetime
     requires_human_review: bool
+
+
+class NotificationKind(StrEnum):
+    SLOT_CONFIRMED = "SLOT_CONFIRMED"
+    SLOT_NOT_BOOKED = "SLOT_NOT_BOOKED"
+
+
+class Notification(_Row):
+    """One outbox row, plus the slot offered to a driver who did not get theirs."""
+
+    notification_id: int
+    driver_id: str
+    request_seq: int
+    kind: NotificationKind
+    message_text: str
+    created_at: AwareDatetime
+    offered_slot_id: str | None = None

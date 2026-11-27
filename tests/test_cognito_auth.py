@@ -19,6 +19,7 @@ from setuhaul.services.identity import InvalidSession
 from setuhaul.api import main
 from setuhaul.api.deps import chat_limiter
 from setuhaul.api.main import app
+from setuhaul.agent.runner import TurnResult
 from setuhaul.db.connection import open_db
 from setuhaul.db.scenario import load_scenario
 from setuhaul.logging_setup import setup_logging
@@ -223,7 +224,7 @@ def test_chat_is_rate_limited_per_driver(api, monkeypatch):
     monkeypatch.setenv("CHAT_RATE_LIMIT", "2")
     get_settings.cache_clear()
     chat_limiter.cache_clear()                     # rebuild the limiter with limit=2
-    monkeypatch.setattr(main, "run_turn", lambda *a, **k: "ok")   # no LLM in tests
+    monkeypatch.setattr(main, "run_turn", lambda *a, **k: TurnResult("ok"))   # no LLM in tests
     manoj = bearer(sign(claims(sub=MANOJ_SUB)))
     thread_id = api.post("/threads", headers=manoj).json()["thread_id"]
 

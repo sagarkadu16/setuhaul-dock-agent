@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from setuhaul.config import get_settings
 from setuhaul.db import queries, writes
 from setuhaul.db.connection import immediate_transaction, savepoint
-from setuhaul.models.domain import SlotRequestRecord, RequestStatus
+from setuhaul.models.domain import NotificationKind, RequestStatus, SlotRequestRecord, SlotView
 from setuhaul.services.booking import (
     BookingError, owned_shipment, require_feasible, book_slot_in_tx
 )
@@ -90,6 +90,7 @@ def resolve_slot(
                 conn, rec.request_seq, RequestStatus.WON, wall_now, "ranked first",
                 appointment_id=appt.appointment_id,
             )
+            _notify(conn, rec, NotificationKind.SLOT_CONFIRMED, None, None, wall_now)
             winner = cand
 
 
@@ -123,10 +124,41 @@ def _lose(
     options = feasible_slots(
         conn, shipment, eta.effective_eta_ts if eta else shipment.original_eta_ts, business_now
     )
+    offered = options[0] if options else None
     writes.decide_request(
         conn, rec.request_seq, status, wall_now, note,
-        offered_slot_id=options[0].slot_id if options else None,
+        offered_slot_id=offered.slot_id if offered else None,
     )
+    _notify(conn, rec, NotificationKind.SLOT_NOT_BOOKED, note, offered, wall_now)
+
+
+def _slot_text(slot: SlotView) -> str:
+    """'dock D2, 12:00-13:00' in the facility's local time (the stored offset)."""
+    return f"dock {slot.dock_code}, {slot.slot_start_ts:%H:%M}–{slot.slot_end_ts:%H:%M}"
+
+
+def _notify(
+    conn: sqlite3.Connection,
+    rec: SlotRequestRecord,
+    kind: NotificationKind,
+    reason: str | None,
+    offered: SlotView | None,
+    wall_now: datetime,
+) -> None:
+    """Outbox row for this decision, in the caller's transaction (decision + message, or neither).
+
+    The text is a fixed template from DB facts, never LLM output.
+    """
+    slot = queries.get_slot(conn, rec.slot_id)
+    if kind == NotificationKind.SLOT_CONFIRMED:
+        text = f"✅ Confirmed: {_slot_text(slot)} is booked for shipment {rec.shipment_id}."
+    else:
+        text = f"❌ Not booked: {_slot_text(slot)}. Reason: {reason}."
+        text += (
+            f" Next valid slot: {_slot_text(offered)}. Tap it below or reply 'yes' to request it."
+            if offered else " No other slot is open right now. Reply here and I'll help."
+        )
+    writes.insert_notification(conn, rec.driver_id, rec.request_seq, kind, text, wall_now)
 
 def check_request(
     conn: sqlite3.Connection,

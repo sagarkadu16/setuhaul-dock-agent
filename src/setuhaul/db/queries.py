@@ -9,7 +9,10 @@ Rules for this module:
 import sqlite3
 from datetime import datetime
 
-from setuhaul.models.domain import Appointment, Driver, EtaEstimate, Shipment, SlotView, SlotRequestRecord, RequestStatus, ChatMessage
+from setuhaul.models.domain import (
+    Appointment, ChatMessage, Driver, EtaEstimate, Notification, RequestStatus, Shipment,
+    SlotRequestRecord, SlotView,
+)
 
 # Shipment statuses that can still need a dock.
 _OPEN_SHIPMENT_STATUSES = ("PLANNED", "ASSIGNED", "IN_TRANSIT", "AT_GATE", "WAITING")
@@ -180,3 +183,51 @@ def last_agent_message(conn: sqlite3.Connection, thread_id: str) -> str | None:
         (thread_id,),
     ).fetchone()
     return row["message_text"] if row else None
+
+
+def due_request_slots_for_driver(
+    conn: sqlite3.Connection, driver_id: str, wall_now: datetime
+) -> list[str]:
+    """Slots where this driver has a PENDING request whose window has closed."""
+    rows = conn.execute(
+        "SELECT DISTINCT slot_id FROM slot_requests WHERE driver_id = ? AND status = 'PENDING' "
+        "AND julianday(decide_after) <= julianday(?)",
+        (driver_id, wall_now.isoformat()),
+    ).fetchall()
+    return [r["slot_id"] for r in rows]
+
+
+def notifications_for_driver(
+    conn: sqlite3.Connection, driver_id: str, after_id: int, since: datetime, limit: int
+) -> list[Notification]:
+    """This driver's notifications with id > after_id, created at or after `since`."""
+    rows = conn.execute(
+        "SELECT n.*, r.offered_slot_id FROM notifications n "
+        "JOIN slot_requests r ON r.request_seq = n.request_seq "
+        "WHERE n.driver_id = ? AND n.notification_id > ? "
+        "AND julianday(n.created_at) >= julianday(?) "
+        "ORDER BY n.notification_id LIMIT ?",
+        (driver_id, after_id, since.isoformat(), limit),
+    ).fetchall()
+    return [Notification.model_validate(dict(r)) for r in rows]
+
+
+def thread_opened_at(conn: sqlite3.Connection, thread_id: str, driver_id: str) -> datetime | None:
+    """When this driver's thread was opened, or None if missing / owned by someone else."""
+    row = conn.execute(
+        "SELECT opened_at FROM chat_threads WHERE thread_id = ? AND driver_id = ?",
+        (thread_id, driver_id),
+    ).fetchone()
+    return datetime.fromisoformat(row["opened_at"]) if row else None
+
+
+def system_notices_since_last_agent_reply(conn: sqlite3.Connection, thread_id: str) -> list[str]:
+    """SYSTEM messages (delivered notifications) the agent has not replied after yet."""
+    rows = conn.execute(
+        "SELECT message_text FROM chat_messages WHERE thread_id = ? AND sender_type = 'SYSTEM' "
+        "AND rowid > COALESCE((SELECT MAX(rowid) FROM chat_messages "
+        "                      WHERE thread_id = ? AND sender_type = 'AGENT'), 0) "
+        "ORDER BY rowid",
+        (thread_id, thread_id),
+    ).fetchall()
+    return [r["message_text"] for r in rows]

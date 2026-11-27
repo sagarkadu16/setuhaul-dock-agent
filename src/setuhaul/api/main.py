@@ -5,9 +5,13 @@ import time
 from fastapi import FastAPI, HTTPException, status, Query, Request
 
 from setuhaul.api.deps import ChatDriverId, Conn, DriverId
-from setuhaul.api.schemas import LoginIn, LoginOut, ChatIn, ChatOut, HistoryOut, MessageOut, ThreadOut, AuthConfigOut
+from setuhaul.api.schemas import (
+    AuthConfigOut, ChatIn, ChatOut, HistoryOut, LoginIn, LoginOut, MessageOut,
+    NotificationOut, NotificationsOut, SlotChip, ThreadOut,
+)
+from setuhaul.models.domain import SlotView
 from setuhaul.clock import SystemClock, get_clock
-from setuhaul.services import chat
+from setuhaul.services import chat, notifications
 from setuhaul.services.identity import LoginFailed, login, InvalidSession, driver_for_session
 from setuhaul.services.sanitize import InvalidMessage
 from setuhaul.agent.runner import run_turn
@@ -45,6 +49,11 @@ async def request_id_and_access_log(request: Request, call_next):
     return response
 
 
+def _chip(slot: SlotView) -> SlotChip:
+    return SlotChip(slot_id=slot.slot_id, dock=slot.dock_code,
+                    start=slot.slot_start_ts, end=slot.slot_end_ts)
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -67,7 +76,7 @@ def chat_route(
     body: ChatIn, driver_id: str = ChatDriverId, conn: sqlite3.Connection = Conn
 ) -> ChatOut:
     try:
-        reply = run_turn(
+        turn = run_turn(
             conn, driver_id, body.thread_id, body.text, body.client_msg_id,
             business_clock=get_clock(), wall_clock=wall_clock,
         )
@@ -75,7 +84,37 @@ def chat_route(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
     except chat.NotYourThread as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
-    return ChatOut(reply=reply)
+    return ChatOut(reply=turn.reply, slots=[_chip(s) for s in turn.slots])
+
+
+@app.get("/notifications")
+def notifications_route(
+    thread_id: str = Query(min_length=1, max_length=64),
+    after: int = Query(default=0, ge=0),
+    driver_id: str = DriverId,
+    conn: sqlite3.Connection = Conn,
+) -> NotificationsOut:
+    """New decision messages for the logged-in driver, after notification id `after`.
+
+    GET although it may write: the writes (deciding a due window, storing the message
+    once) are idempotent and would happen anyway, so repeating the call changes nothing.
+    Not rate limited like /chat: it costs no LLM call.
+    """
+    try:
+        delivered = notifications.poll(
+            conn, driver_id, thread_id, after,
+            business_now=get_clock().now(), wall_now=wall_clock.now(),
+        )
+    except chat.NotYourThread as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+    return NotificationsOut(notifications=[
+        NotificationOut(
+            id=d.notification.notification_id, kind=d.notification.kind,
+            text=d.notification.message_text, created_at=d.notification.created_at,
+            slots=[_chip(d.offered_slot)] if d.offered_slot else [],
+        )
+        for d in delivered
+    ])
 
 
 @app.get("/history")

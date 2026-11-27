@@ -35,8 +35,29 @@ class ChatIn(_In):
     client_msg_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
 
 
+class SlotChip(BaseModel):
+    """A slot the UI may show as a button. Always from tool/DB data, never from LLM text."""
+    slot_id: str
+    dock: str
+    start: datetime      # facility-local offset kept (+05:30), so the UI can show HH:MM as-is
+    end: datetime
+
+
 class ChatOut(BaseModel):
     reply: str
+    slots: list[SlotChip] = []
+
+
+class NotificationOut(BaseModel):
+    id: int
+    kind: Literal["SLOT_CONFIRMED", "SLOT_NOT_BOOKED"]
+    text: str
+    created_at: datetime
+    slots: list[SlotChip] = []     # the offered slot, when the driver did not get theirs
+
+
+class NotificationsOut(BaseModel):
+    notifications: list[NotificationOut]
 
 
 class MessageOut(BaseModel):

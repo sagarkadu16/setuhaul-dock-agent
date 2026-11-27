@@ -60,6 +60,7 @@ def slot_options(ctx: ToolContext, shipment_id: str | None = None) -> dict[str, 
     eta = queries.latest_eta(ctx.conn, s.shipment_id)
     eta_ts = eta.effective_eta_ts if eta else s.original_eta_ts
     slots = feasible_slots(ctx.conn, s, eta_ts, ctx.business_clock.now())[:MAX_OPTIONS]
+    ctx.shown_slots[:] = slots
     return {
         "shipment_id": s.shipment_id,
         "options": [
@@ -90,11 +91,13 @@ def request_slot(
         )
     except BookingError as e:
         return {"error": str(e)}
+    ctx.shown_slots.clear()     # chosen: stop offering buttons
     return {
         "status": rec.status.value,
         "slot": _slot_brief(ctx, rec.slot_id),
-        "message": "Request received. Other trucks may want this slot. "
-                   "Tell the driver the decision comes in a few seconds, then call check_my_request.",
+        "message": "Request received. Other trucks may want this slot. Tell the driver the "
+                   "decision will appear here as a notification in a few seconds, so they don't "
+                   "need to ask again. Do not call check_my_request now.",
     }
 
 
@@ -114,11 +117,15 @@ def check_my_request(ctx: ToolContext, shipment_id: str | None = None) -> dict[s
         return {"error": str(e)}
 
     result: dict[str, Any] = {"status": rec.status.value, "slot": _slot_brief(ctx, rec.slot_id)}
+    ctx.shown_slots.clear()
     if rec.status == RequestStatus.PENDING:
-        result["message"] = "Still deciding. Ask the driver to check again in a few seconds."
+        result["message"] = "Still deciding. Tell the driver the result will appear here shortly."
     elif rec.status == RequestStatus.WON:
         result["message"] = "Booked. Confirm the slot to the driver."
     else:
+        offered = queries.get_slot(ctx.conn, rec.offered_slot_id) if rec.offered_slot_id else None
+        if offered is not None:
+            ctx.shown_slots.append(offered)
         result["reason"] = rec.decision_note
         result["offered_slot"] = _slot_brief(ctx, rec.offered_slot_id)
         result["message"] = "Not booked. Explain the reason and offer the offered_slot."

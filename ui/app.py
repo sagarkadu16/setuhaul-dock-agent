@@ -1,15 +1,18 @@
 """Driver chat UI. Talks to the API over HTTP only: never imports setuhaul internals."""
 
 import os
+import uuid
+from datetime import datetime
 
 import httpx
 import streamlit as st
-import uuid
 
 from cognito_login import CognitoLogin, LoginError
 
 API_URL = os.getenv("SETUHAUL_API_URL", "http://localhost:8000")
 TIMEOUT_S = 60   # an agent turn can take several seconds
+POLL_EVERY = "3s"   # how often the chat asks for slot decisions (no LLM cost)
+AVATARS = {"DRIVER": "🚚", "AGENT": "🏭", "SYSTEM": "🔔"}
 
 st.set_page_config(page_title="SetuHaul Driver Chat", page_icon="🚚")
 
@@ -38,7 +41,8 @@ def load_history() -> list[dict]:
     r.raise_for_status()
     return r.json()["messages"]
 
-def send(text: str) -> str:
+def send(text: str) -> tuple[str, list[dict]]:
+    """One chat turn. Returns (reply, slots to offer as buttons)."""
     payload = {"thread_id": st.session_state.thread_id, "text": text,
                "client_msg_id": uuid.uuid4().hex}          # one id per message, reused on retry
     for attempt in range(2):
@@ -47,38 +51,98 @@ def send(text: str) -> str:
             break
         except httpx.TransportError:
             if attempt == 1:
-                return "Network problem. Please try again."
+                return "Network problem. Please try again.", []
     if r.status_code != 200:
-        return r.json().get("detail", "Something went wrong.")
-    return r.json()["reply"]
+        return r.json().get("detail", "Something went wrong."), []
+    body = r.json()
+    return body["reply"], body.get("slots", [])
+
+
+def hhmm(iso: str) -> str:
+    """'2026-08-04T12:00:00+05:30' -> '12:00'. Keeps the facility's offset (no tz shift)."""
+    return datetime.fromisoformat(iso).strftime("%H:%M")
+
+
+def slot_label(slot: dict) -> str:
+    return f"Dock {slot['dock']} · {hhmm(slot['start'])}–{hhmm(slot['end'])}"
+
+
+def render_message(m: dict) -> None:
+    sender = m["sender"]
+    with st.chat_message("user" if sender == "DRIVER" else "assistant",
+                         avatar=AVATARS.get(sender, "🏭")):
+        if sender == "DRIVER":
+            st.text(m["text"])                  # driver text is never rendered as markdown
+        else:
+            st.markdown(m["text"])
+
+
+def slot_buttons(slots: list[dict]) -> None:
+    """Tappable slots under the latest message. A tap sends a normal chat message, so a
+    booking still goes through the agent and Python's checks (one path, not two)."""
+    st.caption("Tap a slot to choose it")
+    for col, slot in zip(st.columns(len(slots)), slots):
+        if col.button(slot_label(slot), key=f"slot-{slot['slot_id']}", icon="🕒", width="stretch"):
+            st.session_state.queued_prompt = f"I'll take {slot_label(slot)} ({slot['slot_id']})."
+
+
+@st.fragment(run_every=POLL_EVERY)
+def notification_poller() -> None:
+    """Every few seconds, ask the API for slot decisions. Renders nothing itself:
+    new messages go into session_state, then one full rerun shows them."""
+    try:
+        r = authed("GET", "/notifications", params={
+            "thread_id": st.session_state.thread_id,
+            "after": st.session_state.get("notif_cursor", 0),
+        })
+    except httpx.HTTPError:
+        return                                  # API blip: just try again next tick
+    if r.status_code != 200:
+        return
+    new = r.json()["notifications"]
+    if not new:
+        return
+    for n in new:
+        st.session_state.messages.append({"sender": "SYSTEM", "text": n["text"], "slots": n["slots"]})
+        st.session_state.setdefault("toasts", []).append(n["text"])
+    st.session_state.notif_cursor = new[-1]["id"]
+    st.rerun(scope="app")
 
 
 def chat_view() -> None:
-    st.title(f"Hi {st.session_state.driver_name}")
-    if st.button("Log out"):
-        logout()
+    with st.sidebar:
+        st.subheader(f"🚚 {st.session_state.driver_name}")
+        st.caption("SetuHaul dock assistant")
+        if st.button("Log out", width="stretch"):
+            logout()
+
+    st.title("Dock assistant")
+    st.caption("Running late or need a new dock slot? Tell me here.")
 
     if "messages" not in st.session_state:
         st.session_state.messages = load_history()
+    for text in st.session_state.pop("toasts", []):   # shown after the rerun, so they persist
+        st.toast(text, icon="🔔")
 
     for m in st.session_state.messages:
-        is_driver = m["sender"] == "DRIVER"
-        with st.chat_message("user" if is_driver else "assistant"):
-            if is_driver:   
-                st.text(m["text"])
-            else:
-                st.markdown(m["text"])
+        render_message(m)
+    last = st.session_state.messages[-1] if st.session_state.messages else None
+    if last and last.get("slots"):              # only the latest options are still valid
+        slot_buttons(last["slots"])
 
-    if prompt := st.chat_input("Type your message", max_chars=1000):
-        with st.chat_message("user"):
-            st.text(prompt)
-        with st.chat_message("assistant"), st.spinner("Thinking..."):
-            reply = send(prompt)
-            st.markdown(reply)
+    notification_poller()
+
+    typed = st.chat_input("Type your message", max_chars=1000)
+    prompt = typed or st.session_state.pop("queued_prompt", None)
+    if prompt:
+        render_message({"sender": "DRIVER", "text": prompt})
+        with st.chat_message("assistant", avatar=AVATARS["AGENT"]), st.spinner("Checking docks..."):
+            reply, slots = send(prompt)
         st.session_state.messages += [
             {"sender": "DRIVER", "text": prompt},
-            {"sender": "AGENT", "text": reply},
+            {"sender": "AGENT", "text": reply, "slots": slots},
         ]
+        st.rerun()                              # one render path: the loop above draws it all
 
 
 def login_view() -> None:

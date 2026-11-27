@@ -97,3 +97,19 @@ def insert_chat_message(
         (message_id, thread_id, sender_type, text, now.isoformat(), external_id, int(requires_review)),
     )
     return message_id if cur.rowcount == 1 else None
+
+
+def insert_notification(
+    conn: sqlite3.Connection,
+    driver_id: str,
+    request_seq: int,
+    kind: str,
+    text: str,
+    now: datetime,
+) -> None:
+    """Outbox row for a decision. UNIQUE(request_seq): a decision is announced once."""
+    conn.execute(
+        "INSERT INTO notifications (driver_id, request_seq, kind, message_text, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (driver_id, request_seq, kind, text, now.isoformat()),
+    )
