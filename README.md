@@ -223,3 +223,12 @@ Model replies vary from run to run; re-run the script after changing the prompt 
 - English only. One fixed day of data (4 Aug 2026).
 - No priority between shipments; unloads longer than a slot are still shown.
 - Trucks already in the yard or at a dock can't be rescheduled here.
+
+## Observability, guardrails and evals
+
+LangSmith tracing of every chat turn and slot decision, an output guardrail that blocks false
+"booked" claims, and an eval suite of 9 driver conversations scored in LangSmith.
+See [docs/observability-evals.md](docs/observability-evals.md).
+
+Run the evals (needs LLM + LangSmith keys in `.env`):
+`uv run --env-file .env python scripts/run_evals.py`

@@ -7,6 +7,9 @@ Two clocks on purpose:
 
 import sqlite3
 from datetime import datetime, timedelta
+from typing import Any
+
+from langsmith import traceable
 
 from setuhaul.config import get_settings
 from setuhaul.db import queries, writes
@@ -69,29 +72,71 @@ def resolve_slot(
     with immediate_transaction(conn):
         due = queries.due_pending_requests(conn, slot_id, wall_now)
         if not due:
-            return  # window still open, or already decided
-        records = {r.request_seq: r for r in due}
-        ranked = rank_requests([_ranking_input(conn, r) for r in due])
+            return  # window still open, or already decided (polled often: not traced)
+        _decide(conn, slot_id, due, business_now=business_now, wall_now=wall_now)
 
-        winner: SlotRequest | None = None
-        for cand in ranked:
-            rec = records[cand.request_seq]
-            if winner is not None:
-                why = f"another truck was ranked ahead on: {deciding_criterion(winner, cand)}"
-                _lose(conn, rec, RequestStatus.LOST, why, business_now, wall_now)
-                continue
-            try:
-                with savepoint(conn):
-                    appt = book_slot_in_tx(conn, rec.driver_id, rec.shipment_id, slot_id, business_now)
-            except BookingError as exc:
-                _lose(conn, rec, RequestStatus.FAILED, str(exc), business_now, wall_now)
-                continue  # next in line gets the chance
-            writes.decide_request(
-                conn, rec.request_seq, RequestStatus.WON, wall_now, "ranked first",
-                appointment_id=appt.appointment_id,
-            )
-            _notify(conn, rec, NotificationKind.SLOT_CONFIRMED, None, None, wall_now)
-            winner = cand
+
+def _without_conn(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Trace inputs without the DB connection or raw records (ids only, no PII)."""
+    return {
+        "slot_id": inputs["slot_id"],
+        "requests": [
+            {"request_seq": r.request_seq, "shipment_id": r.shipment_id, "driver_id": r.driver_id}
+            for r in inputs["due"]
+        ],
+        "business_now": str(inputs["business_now"]),
+    }
+
+
+@traceable(name="resolve_slot", run_type="chain", tags=["slot-decision"],
+           process_inputs=_without_conn)
+def _decide(
+    conn: sqlite3.Connection,
+    slot_id: str,
+    due: list[SlotRequestRecord],
+    *,
+    business_now: datetime,
+    wall_now: datetime,
+) -> dict[str, Any]:
+    """Rank the due requests and give the slot to the best one that can still book it.
+
+    Runs inside the caller's transaction. Returns a summary of the decision; it is
+    only used for tracing (who won, who lost, and on which criterion).
+    """
+    records = {r.request_seq: r for r in due}
+    ranked = rank_requests([_ranking_input(conn, r) for r in due])
+    outcomes: list[dict[str, Any]] = []
+
+    winner: SlotRequest | None = None
+    for cand in ranked:
+        rec = records[cand.request_seq]
+        facts = {
+            "shipment_id": cand.shipment_id, "driver_id": rec.driver_id,
+            "priority": str(cand.priority), "at_facility": cand.at_facility,
+            "eta": str(cand.eta), "request_seq": cand.request_seq,
+        }
+        if winner is not None:
+            why = f"another truck was ranked ahead on: {deciding_criterion(winner, cand)}"
+            _lose(conn, rec, RequestStatus.LOST, why, business_now, wall_now)
+            outcomes.append({**facts, "status": "LOST", "reason": why})
+            continue
+        try:
+            with savepoint(conn):
+                appt = book_slot_in_tx(conn, rec.driver_id, rec.shipment_id, slot_id, business_now)
+        except BookingError as exc:
+            _lose(conn, rec, RequestStatus.FAILED, str(exc), business_now, wall_now)
+            outcomes.append({**facts, "status": "FAILED", "reason": str(exc)})
+            continue  # next in line gets the chance
+        writes.decide_request(
+            conn, rec.request_seq, RequestStatus.WON, wall_now, "ranked first",
+            appointment_id=appt.appointment_id,
+        )
+        _notify(conn, rec, NotificationKind.SLOT_CONFIRMED, None, None, wall_now)
+        winner = cand
+        outcomes.append({**facts, "status": "WON", "appointment_id": appt.appointment_id})
+
+    return {"slot_id": slot_id, "winner": winner.shipment_id if winner else None,
+            "outcomes": outcomes}
 
 
 def _ranking_input(conn: sqlite3.Connection, rec: SlotRequestRecord) -> SlotRequest:
