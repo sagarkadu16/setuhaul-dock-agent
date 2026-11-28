@@ -13,6 +13,7 @@ from setuhaul.clock import Clock
 from setuhaul.db import queries
 from setuhaul.models.domain import SlotView
 from setuhaul.services import chat
+from setuhaul.services.guardrails import check_booking_claim
 from setuhaul.tools.context import ToolContext
 
 log = logging.getLogger(__name__)
@@ -58,10 +59,24 @@ def run_turn(
     try:
         out = graph.invoke(
             {"messages": _turn_input(conn, thread_id, stored.text)},
-            {"configurable": {"thread_id": thread_id}, "recursion_limit": MAX_GRAPH_STEPS},
+            {
+                "configurable": {"thread_id": thread_id},
+                "recursion_limit": MAX_GRAPH_STEPS,
+                # LangSmith: one trace per turn, filterable by driver and grouped by
+                # conversation. IDs only, never email or phone.
+                "run_name": "driver_turn",
+                "tags": ["driver-chat"],
+                "metadata": {"driver_id": driver_id, "thread_id": thread_id,
+                             "flagged_for_review": stored.flagged},
+            },
         )
         reply = out["messages"][-1].content or FALLBACK_REPLY
         slots = list(ctx.shown_slots)
+        guard = check_booking_claim(conn, driver_id, reply)
+        if guard["blocked"]:
+            log.warning("guardrail blocked a booking claim thread=%s driver=%s",
+                        thread_id, driver_id)
+            reply, slots = guard["reply"], []
     except Exception:
         log.exception("agent turn failed thread=%s driver=%s", thread_id, driver_id)
         reply, slots = FALLBACK_REPLY, []
