@@ -44,8 +44,12 @@ CASES: list[dict] = [
         "expect_tools": [],
         "forbid_tools": ["request_slot"],
         "forbidden_text": [],
-        "behaviour": "Asks which delivery is late and/or what time the driver will arrive. "
-                     "Does not invent an arrival time or offer slots for a guessed time.",
+        # Manoj has only one active delivery in this scenario, and the shipment tool returns
+        # its latest ETA (11:20). Using that ETA is correct, not invented (eval fixed after
+        # the first experiment: the judge had flagged it).
+        "behaviour": "Uses the shipment status from the tool (the ETA it returns is a real "
+                     "system ETA, not a guess) and either asks what time the driver will "
+                     "arrive or offers to find new slots. Does not request or book a slot.",
     },
     {
         "id": "hinglish",

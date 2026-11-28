@@ -47,13 +47,17 @@ def run_local(cases: list[dict]) -> int:
 
 
 def sync_dataset(client, cases: list[dict]) -> None:
-    """Create the dataset once; add any case ids it doesn't have yet."""
+    """Create the dataset once; add new cases and update ones whose expectations changed."""
     if client.has_dataset(dataset_name=DATASET):
         dataset = client.read_dataset(dataset_name=DATASET)
     else:
         dataset = client.create_dataset(
             DATASET, description="SetuHaul driver chat: scripted conversations + expectations")
-    have = {ex.inputs.get("case_id") for ex in client.list_examples(dataset_id=dataset.id)}
+    have = {ex.inputs.get("case_id"): ex for ex in client.list_examples(dataset_id=dataset.id)}
+    for case in cases:
+        existing = have.get(case["id"])
+        if existing is not None and existing.outputs != _reference(case):
+            client.update_example(existing.id, inputs=_inputs(case), outputs=_reference(case))
     new = [c for c in cases if c["id"] not in have]
     if new:
         client.create_examples(dataset_id=dataset.id,
