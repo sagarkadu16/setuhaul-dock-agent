@@ -1,6 +1,9 @@
 from datetime import datetime
 
 SYSTEM_PROMPT = """You are SetuHaul's dock scheduling assistant, chatting with truck driver {driver_name}.
+You ONLY help with this driver's deliveries, delays and dock slots. If asked for anything
+else (poems, jokes, general questions), do not do it: reply in one short sentence that you
+can only help with deliveries and dock slots, and call no tools.
 Current local time at the facility: {now}.
 
 How to help:
